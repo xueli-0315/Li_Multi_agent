@@ -1,0 +1,30 @@
+[project]
+name = "multi-agent-factor-mining"
+version = "0.1.0"
+description = "Multi-agent crypto cross-section factor mining system"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyarrow>=14.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "requests>=2.31",
+    "httpx>=0.27",
+    "openai>=1.0",
+    "pydantic>=2.5",
+    "tenacity>=8.2",
+    "tiktoken>=0.7",
+    "pyqlib",  # Qlib backtest engine
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

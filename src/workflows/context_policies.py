@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+from core import AgentContextPolicy, ContextPolicyRegistry
+
+
+def build_alpha_factor_mining_policy_registry() -> ContextPolicyRegistry:
+    """构建智能体默认上下文策略：限定读写键与回看窗口。"""
+    registry = ContextPolicyRegistry()
+    registry.add_many(
+        [
+            AgentContextPolicy(
+                agent_name="hypothesis_agent",
+                role="factor_propose",
+                readable_shared_keys={
+                    "market",
+                    "scenario",
+                    "direction",
+                    "feedback",
+                    "rag_text",
+                    "hypothesis_feedback_history",
+                    "phase",
+                    "round_idx",
+                    "trajectory_id",
+                    "parent_ids",
+                    "available_features",
+                    "data_time_step",
+                    "data_time_step_description",
+                    "distilled_knowledge",
+                },
+                writable_shared_keys={"hypothesis", "hypothesis_reasoning", "hypothesis_structured"},
+                trace_window=8,
+            ),
+            AgentContextPolicy(
+                agent_name="experiment_designer_agent",
+                role="factor_construct",
+                readable_shared_keys={
+                    "market",
+                    "scenario",
+                    "hypothesis",
+                    "hypothesis_reasoning",
+                    "hypothesis_structured",
+                    "feedback",
+                    "rag_text",
+                    "hypothesis_feedback_history",
+                    "phase",
+                    "round_idx",
+                    "trajectory_id",
+                    "parent_ids",
+                    "available_features",
+                    "data_time_step",
+                    "data_time_step_description",
+                },
+                writable_shared_keys={"experiment_spec", "task_plan", "experiment_id", "qlib_factor_experiment"},
+                trace_window=8,
+            ),
+            AgentContextPolicy(
+                agent_name="factor_coder_agent",
+                role="factor_calculate",
+                readable_shared_keys={
+                    "experiment_spec",
+                    "task_plan",
+                    "scenario",
+                    "qlib_factor_experiment",
+                    "phase",
+                    "round_idx",
+                    "trajectory_id",
+                    "parent_ids",
+                    "available_features",
+                    "data_time_step",
+                    "data_time_step_description",
+                },
+                writable_shared_keys={"factor_implementation", "calculation_report", "qlib_factor_experiment"},
+                trace_window=5,
+            ),
+            AgentContextPolicy(
+                agent_name="backtest_runner_agent",
+                role="factor_backtest",
+                readable_shared_keys={
+                    "factor_implementation",
+                    "calculation_report",
+                    "market",
+                    "scenario",
+                    "domain_dataset_summary",
+                    "qlib_factor_experiment",
+                    "phase",
+                    "round_idx",
+                    "trajectory_id",
+                    "parent_ids",
+                },
+                writable_shared_keys={"backtest_report", "metrics", "qlib_factor_experiment"},
+                trace_window=5,
+            ),
+            AgentContextPolicy(
+                agent_name="feedback_summarizer_agent",
+                role="feedback",
+                readable_shared_keys={
+                    "hypothesis",
+                    "hypothesis_structured",
+                    "experiment_spec",
+                    "factor_implementation",
+                    "calculation_report",
+                    "backtest_report",
+                    "metrics",
+                    "scenario",
+                    "hypothesis_feedback_history",
+                    "qlib_factor_experiment",
+                    "phase",
+                    "round_idx",
+                    "trajectory_id",
+                    "parent_ids",
+                },
+                writable_shared_keys={
+                    "feedback",
+                    "next_hypothesis_hint",
+                    "distilled_knowledge",
+                    "hypothesis_feedback_history",
+                    "qlib_factor_experiment",
+                },
+                trace_window=10,
+            ),
+        ]
+    )
+    return registry

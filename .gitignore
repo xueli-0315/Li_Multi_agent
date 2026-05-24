@@ -1,0 +1,16 @@
+.env
+EXECUTION_PLAN_v1.md
+.env.local
+.DS_Store
+__pycache__/
+*.py[cod]
+artifacts/
+logs/
+results/
+mlruns/
+*.egg-info/
+factor_library/wiki/
+factor_library/raw/evolved/
+factor_library/raw/factor_codes/
+factor_library/raw/*.bak
+factor_library/raw/negative_knowledge/all_failures.jsonl

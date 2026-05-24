@@ -1,0 +1,8 @@
+{
+  "system_prompt": "请在场景 {{scenario}} 下，为{{targets}}实现可执行的因子产物。\n优先基于因子表达式进行确定性模板渲染，输出必须严格为 JSON：\n{{implementation_output_format}}",
+  "user_prompt": "实验规格：\n{{experiment_spec}}\n\n任务计划：\n{{task_plan}}\n\n目标因子列表：\n{{factor_list}}\n\n历史失败摘要：\n{{previous_failure_summary}}\n\n请严格遵守数据特征白名单，禁止在代码中计算或假设不存在的外部数据列。\n仅返回 JSON。",
+  "targets": "factors",
+  "implementation_output_format": "{\"implementations\":[{\"factor_name\":\"string\",\"expression\":\"string\",\"code\":\"string\",\"status\":\"generated|missing_expression|missing_code\"}]}",
+  "implementation_source": "factor_running_strategy_template",
+  "code_template": "def calculate_factor(df):\n    # {{ factor_name }}: {{ description }}\n    return {{ expression }}"
+}

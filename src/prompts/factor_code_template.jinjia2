@@ -1,0 +1,29 @@
+import numpy as np
+import pandas as pd
+
+from factor_runtime.expr_parser import parse_expression
+from factor_runtime.expr_parser import parse_symbol
+from factor_runtime.function_lib import *
+
+
+def calculate_factor(expr: str, name: str, panel_data_path: str = "./data/panel_data.parquet"):
+    """Parse and evaluate a factor expression against panel data."""
+    df = pd.read_parquet(panel_data_path)
+    
+    expr = parse_symbol(expr, [str(col) for col in df.columns])
+    expr = parse_expression(expr)
+    result = eval(expr)
+    
+    if isinstance(result, pd.DataFrame):
+        result_series = result[name] if name in result.columns else result.iloc[:, 0]
+    elif isinstance(result, pd.Series):
+        result_series = result
+    else:
+        result_series = pd.Series(result, index=df.index)
+        
+    return result_series.astype(np.float64)
+
+if __name__ == "__main__":
+    expr = "{{ expression }}"
+    name = "{{ factor_name }}"
+    calculate_factor(expr, name)

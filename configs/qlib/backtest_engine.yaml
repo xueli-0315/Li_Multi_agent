@@ -1,0 +1,104 @@
+engine:
+  default_backtest_engine: qlib
+  qlib_enabled: true
+  lightweight_enabled: true
+  portfolio_backtest_enabled: true
+  qlib_config_dir: .
+  baseline_config_name: conf_baseline.yaml
+  combined_config_name: conf_combined_factors.yaml
+dataset:
+  target_column: returns_1d
+  required_index_levels: [datetime, symbol]
+  signal_exclude_prefixes: [returns_]
+metrics:
+  annualization_factor: 252
+  corr_method: spearman
+  layer_bins: 5
+  layer_min_symbols: 10
+  no_factor_metrics:
+    sharpe: 0.0
+    turnover: 1.0
+    drawdown: 1.0
+    coverage: 0.0
+  default_metric_formula:
+    sharpe_coverage_weight: 0.9
+    sharpe_failure_weight: 0.2
+    turnover_base: 0.18
+    turnover_coverage_weight: 0.27
+    drawdown_base: 0.1
+    drawdown_failure_weight: 0.25
+resolver:
+  alias_map:
+    vwap_weighted: vwap
+    funding_rate_increase: funding_rate
+    holding_volume_increase: oi_change_pct
+    volume_increase: volume
+    market_volatility: close
+    turnover_rate_control: volume
+  function_token_blacklist:
+    - rank
+    - zscore
+    - mean
+    - std
+    - skew
+    - kurt
+    - max
+    - min
+    - median
+    - scale
+    - ts_rank
+    - ts_zscore
+    - ts_std
+    - ts_var
+    - ts_corr
+    - ts_covariance
+    - percentile
+    - delta
+    - delay
+    - ts_mean
+    - ts_sum
+    - ts_median
+    - ts_mad
+    - ts_pctchange
+    - ts_min
+    - ts_max
+    - ts_argmax
+    - ts_argmin
+    - ts_quantile
+    - highday
+    - lowday
+    - sumac
+    - sma
+    - wma
+    - ema
+    - decaylinear
+    - prod
+    - log
+    - sqrt
+    - pow
+    - sign
+    - exp
+    - abs
+    - inv
+    - add
+    - subtract
+    - multiply
+    - divide
+    - and
+    - or
+    - count
+    - sumif
+    - filter
+    - sequence
+    - regbeta
+    - regresi
+    - rsi
+    - macd
+    - bb_middle
+    - bb_upper
+    - bb_lower
+    - if
+    - else
+    - true
+    - false
+    - return

@@ -1,0 +1,5 @@
+{
+  "system_prompt": "请在场景 {{scenario}} 下评估市场 {{market}} 的因子实现结果。\n将计算状态作为硬约束，输出必须是严格 JSON：\n{{backtest_output_format}}",
+  "user_prompt": "因子实现：\n{{factor_implementation}}\n\n计算报告：\n{{calculation_report}}\n\n因子来源：{{factor_source}}\n成功生成因子数：{{generated_factors}}\n失败因子数：{{failed_factors}}\n\n仅返回 JSON。",
+  "backtest_output_format": "{\"backtest_report\":{\"status\":\"finished|partial|failed\",\"summary\":\"string\",\"factor_source\":\"string\"},\"metrics\":{\"sharpe\":\"number\",\"turnover\":\"number\",\"drawdown\":\"number\",\"coverage\":\"number\"}}"
+}

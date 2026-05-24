@@ -1,0 +1,51 @@
+{
+  "system_prompt": [
+    "用户正在一个 data-driven 的研究与开发流程中为 {{targets}} 生成新的 hypotheses。",
+    "{{targets}} 将用于以下 scenario：",
+    "{{scenario}}",
+    "用户已经提出过若干 hypotheses 并完成了评估。你将会收到这些信息。",
+    "你的任务是检查某个 hypothesis 是否已经被提出过。如果已存在，请沿用它或生成改进版本。",
+    "{% if hypothesis_specification %}",
+    "为帮助你制定新的 hypotheses，用户提供了以下补充信息：",
+    "{{hypothesis_specification}}.",
+    "**Important:** 如果 hypothesis_specification 列出了你需要遵循的下一步，请确保严格遵循这些指引。",
+    "{% endif %}",
+    "请使用以下格式与规范生成输出。避免做出依赖于已支持数据范围之外的假设。",
+    "{{ hypothesis_output_format }}"
+  ],
+  "user_prompt": [
+    "{% if hypothesis_and_feedback|length == 0 %}这是 hypothesis 生成的第一轮。用户在该 scenario 下尚未提出 hypothesis。鼓励你提出一个具有创新性、并与既有视角显著不同的 hypothesis。",
+    "{% elif hypothesis_and_feedback|length > 0 and round == 0 %}{{ hypothesis_and_feedback }}",
+    "{% else %}当前不是第一轮，用户已经在该 scenario 下提出了多个 hypothesis 并进行了多次评估。",
+    "先前的 hypothesis 及对应的反馈如下（重点关注最后一条，以及其中给出的新 hypothesis 与 reasoning，判断你是否认同）：",
+    "{{ hypothesis_and_feedback }}",
+    "{% endif %}",
+    "{% if RAG %}",
+    "为协助你生成新的 {{targets}}，我们提供了以下信息：{{RAG}}。",
+    "**Note:** 提供的 RAG 仅供参考。",
+    "你必须谨慎评估 RAG 是否与 {{targets}} 对齐。",
+    "如果不对齐，则不应使用。请保持谨慎并做出你自己的判断。",
+    "{% endif %}",
+    "{% if distilled_knowledge %}",
+    "来自过去经验提炼的 Distilled Knowledge: {{distilled_knowledge}}",
+    "{% endif %}",
+    "同时请生成后续 reasoning 和 distilled knowledge 对应的相关键。对于这些键，尤其是 knowledge，请在具体 scenario 的上下文中解释，以构建该特定领域的 domain knowledge，而不是泛化知识。"
+  ],
+  "hypothesis_and_feedback": [
+    "{% for item in history_entries %}",
+    "Hypothesis {{ loop.index }}: {{ item.hypothesis }}",
+    "与该 hypothesis 对应结果的 Observation: {{ item.feedback_summary }}",
+    "针对原始 hypothesis 的 Feedback: {{ item.feedback_summary }}",
+    "面向上下文的新 Feedback（供你认同或改进）：{{ item.feedback_new_hypothesis }}",
+    "新 hypothesis 的 Reasoning: {{ item.feedback_reason }}",
+    "切换到该 hypothesis 是否有效？（关注变化本身）：{{ item.feedback_decision }}",
+    "{% endfor %}"
+  ],
+  "potential_direction_transformation": "这是第一轮，用户提供了一个潜在方向：\"{{potential_direction}}\"。参考该方向，你需要将其转换为用于 factor 生成的正式 hypothesis，要求表达清晰且可执行。构建 hypothesis 时请考虑以下方面：\n1. Clarity：确保 hypothesis 具体且无歧义。\n2. Actionability：hypothesis 应该给出清晰的实验或研究路径。\n3. Relevance：确保 hypothesis 与用户提供的潜在方向直接相关。",
+  "first_round_fallback": "由于这是第一轮，没有可用的历史 hypothesis 与 feedback。鼓励你提出一个具有创新性、并与既有视角显著不同的 hypothesis。",
+  "hypothesis_output_format": "{\"hypothesis\":\"单行文本。基于已提供信息生成的新 hypothesis。\",\"concise_knowledge\":\"单行文本。基于理论原则的可迁移 knowledge。使用条件句式，例如：'If...., ..; When..., .; and etc'。确保表达清晰、无歧义。例如避免说 'previous hypothesis'，因为读者无法明确其指代。\",\"concise_observation\":\"单行文本。聚焦于对给定 scenario、数据特征或过往经验（failures & succeses）的 Observation。\",\"concise_justification\":\"单行文本。基于理论原则或初始假设，对 hypothesis 给出 Justification。\",\"concise_specification\":\"单行文本。定义 hypothesis 的范围、条件与约束。明确预期关系、变量和阈值，确保其可测试并与观测数据相关。\"}",
+  "hypothesis_specification": "1. Data-Driven Hypothesis Formation：将 hypothesis 严格限制在上下文提供的确切可用特征范围内（如 open, high, low, close, volume, vwap 等）。除非明确列出，否则绝不要假设存在外部补充数据。让 hypotheses 与数据的时间维度和截面属性保持一致。\n2. Justification of the Hypothesis：利用已观察到的市场模式创造性地推断潜在驱动因素。在基于经验证据的同时，探索创新的联系。提出挑战传统假设且具可测试性的独特见解。\n3. Continuous Optimization and Exploration：通过测试不同变体迭代优化初始 hypothesis。将实证反馈纳入迭代，以提升 factor 的预测能力。\n4. DIVERSITY AND EXPLORATION MANDATE: 请务必检查历史记录！如果最近几次假设都失败了，你必须强制探索与失败假设完全不同的变量特征组合。不要仅仅对同一个特征进行微调，请循环使用所有可用特征寻找突破口。",
+  "targets": "factors",
+  "default_history_limit": 6,
+  "min_history_limit": 1
+}
