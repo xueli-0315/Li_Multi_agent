@@ -378,49 +378,15 @@ def _chain_loggers(*loggers: Callable[[dict[str, Any]], None] | None) -> Callabl
     return _combined
 
 
-def _prepare_data_bundle(
-    *,
-    panel_data_path: str,
-    text_data_path: str = "",
-    log_base: Path,
-    write_data_artifacts: bool = False,
-    debug_symbol_count: int = 20,
-    debug_time_steps: int = 180,
-):
-    from adapters import UnifiedMarketDataAdapter
-
-    if not text_data_path and not write_data_artifacts:
-        return Path(panel_data_path), None
-
-    bundle = UnifiedMarketDataAdapter(
-        panel_data_path,
-        text_data_path=text_data_path or None,
-        artifact_dir=log_base / "data_bundle",
-        write_artifacts=True,
-        debug_symbol_count=debug_symbol_count,
-        debug_time_steps=debug_time_steps,
-    ).load()
-    merged_path = Path(bundle.artifacts.get("merged_panel", panel_data_path))
-    print(f"Prepared data bundle: {log_base / 'data_bundle'}")
-    return merged_path, bundle
-
-
 def _run_evolution(
     *,
     panel_data_path: str,
-    text_data_path: str,
-    write_data_artifacts: bool,
-    debug_symbol_count: int,
-    debug_time_steps: int,
     debug_enabled: bool,
     log_base: Path,
     progress_logger: Callable[[dict[str, Any]], None],
     raw_io_logger: Callable[[dict[str, Any]], None],
-    evolve_target: str = "factor",
-    factor_ga_mode: str = "hybrid",
     num_generations: int = 5,
     population_size: int = 10,
-    seed: int = 42,
 ) -> None:
     """调用 scripts/run_factor_evolution.py 的进化流程。"""
     if str(PROJECT_ROOT) not in sys.path:
@@ -431,17 +397,8 @@ def _run_evolution(
 
     config = EvolutionConfig()
     config.panel_data_path = Path(panel_data_path)
-    config.text_data_path = Path(text_data_path) if text_data_path else None
-    config.write_data_artifacts = bool(write_data_artifacts)
-    config.debug_symbol_count = debug_symbol_count
-    config.debug_time_steps = debug_time_steps
-    config.evolve_target = evolve_target
-    config.ga_mode = factor_ga_mode
-    config.factor_ga_mode = factor_ga_mode
     config.num_generations = num_generations
     config.population_size = population_size
-    config.seed = seed
-    config.final_audit_top_n = 0
 
     run_evolution(config)
 
@@ -449,10 +406,6 @@ def _run_evolution(
 def _run_batch_backtest(
     *,
     panel_data_path: str,
-    text_data_path: str,
-    write_data_artifacts: bool,
-    debug_symbol_count: int,
-    debug_time_steps: int,
     log_base: Path,
     min_factors: int = 10,
     ic_threshold: float = 0.003,
@@ -464,17 +417,9 @@ def _run_batch_backtest(
     from scripts.run_batch_backtest import run_batch_backtest
 
     print(f"Running batch backtest, logs: {log_base}")
-    effective_panel_path, _bundle = _prepare_data_bundle(
-        panel_data_path=panel_data_path,
-        text_data_path=text_data_path,
-        log_base=log_base,
-        write_data_artifacts=write_data_artifacts,
-        debug_symbol_count=debug_symbol_count,
-        debug_time_steps=debug_time_steps,
-    )
 
     result = run_batch_backtest(
-        panel_data_path=Path(effective_panel_path),
+        panel_data_path=Path(panel_data_path),
         min_factors=min_factors,
         output_dir=log_base,
         ic_threshold=ic_threshold,
@@ -491,7 +436,7 @@ def _run_batch_backtest(
             _spec = importlib.util.spec_from_file_location("generate_workflow_analysis", _script_path)
             _mod = importlib.util.module_from_spec(_spec)
             _spec.loader.exec_module(_mod)
-            panel_path = Path(effective_panel_path)
+            panel_path = Path(panel_data_path)
             _mod.run_analysis(run_out, panel_path, output_dir=run_out / "figures")
             print(f"Workflow analysis charts generated: {run_out / 'figures'}")
         except Exception as e:
@@ -503,14 +448,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", choices=["mining", "evolution", "batch-backtest"], default="mining",
                         help="Run mode: mining (default), evolution, or batch-backtest.")
     parser.add_argument("--panel-data-path", default=str(PROJECT_ROOT / "data" / "panel_data.parquet"))
-    parser.add_argument("--text-data-path", default="",
-                        help="Optional local JSONL/CSV market text data to merge into the panel.")
-    parser.add_argument("--debug-symbol-count", type=int, default=20,
-                        help="Maximum symbols in generated debug panel.")
-    parser.add_argument("--debug-time-steps", type=int, default=180,
-                        help="Maximum time steps in generated debug panel.")
-    parser.add_argument("--write-data-artifacts", action="store_true", default=False,
-                        help="Write data_bundle artifacts even when no text data is provided.")
     parser.add_argument("--loop-count", type=int, default=1)
     parser.add_argument("--initial-direction", default="", help="Optional initial hypothesis direction.")
     parser.add_argument("--initial-hypothesis", default="", help="Optional seed hypothesis injected into first loop.")
@@ -521,12 +458,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Evolution mode: number of generations (default: 5)")
     parser.add_argument("--evo-population", type=int, default=10,
                         help="Evolution mode: population size (default: 10)")
-    parser.add_argument("--evolve-target", choices=["factor", "model_params"], default="factor",
-                        help="Evolution mode: optimize factors (default) or model parameters.")
-    parser.add_argument("--factor-ga-mode", choices=["hybrid", "expression", "subset"], default="hybrid",
-                        help="Evolution factor target: expression, subset, or hybrid.")
-    parser.add_argument("--evo-seed", type=int, default=42,
-                        help="Evolution mode: random seed (default: 42)")
     parser.add_argument("--min-factors", type=int, default=10,
                         help="Batch backtest: minimum factors required (default: 10)")
     parser.add_argument("--ic-threshold", type=float, default=0.003,
@@ -562,29 +493,18 @@ def main() -> None:
     if args.mode == "evolution":
         _run_evolution(
             panel_data_path=args.panel_data_path,
-            text_data_path=args.text_data_path,
-            write_data_artifacts=args.write_data_artifacts,
-            debug_symbol_count=args.debug_symbol_count,
-            debug_time_steps=args.debug_time_steps,
             debug_enabled=debug_enabled,
             log_base=log_base,
             progress_logger=progress_logger,
             raw_io_logger=raw_io_logger,
-            evolve_target=args.evolve_target,
-            factor_ga_mode=args.factor_ga_mode,
             num_generations=args.evo_generations,
             population_size=args.evo_population,
-            seed=args.evo_seed,
         )
         return
 
     if args.mode == "batch-backtest":
         _run_batch_backtest(
             panel_data_path=args.panel_data_path,
-            text_data_path=args.text_data_path,
-            write_data_artifacts=args.write_data_artifacts,
-            debug_symbol_count=args.debug_symbol_count,
-            debug_time_steps=args.debug_time_steps,
             log_base=log_base,
             min_factors=args.min_factors,
             ic_threshold=args.ic_threshold,
@@ -605,12 +525,6 @@ def main() -> None:
     ]
     if args.stop_on_error:
         cmd.append("--stop-on-error")
-    if args.text_data_path:
-        cmd.extend(["--text-data-path", args.text_data_path])
-    if args.write_data_artifacts:
-        cmd.append("--write-data-artifacts")
-    cmd.extend(["--debug-symbol-count", str(args.debug_symbol_count)])
-    cmd.extend(["--debug-time-steps", str(args.debug_time_steps)])
     print(f"Running mining mode: {' '.join(cmd)}", file=sys.stderr)
     result = subprocess.run(cmd)
     sys.exit(result.returncode)

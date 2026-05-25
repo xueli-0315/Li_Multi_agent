@@ -1,6 +1,6 @@
 # Mining Mode：多智能体因子挖掘流程说明
 
-本文件说明 `main.py --mode mining` 与 `scripts/run_alpha_factor_mining_loop.py` 的完整流程。  
+本文件说明 `main.py --mode mining` 与 `scripts/run_alpha_factor_mining_loop.py` 的完整流程。
 这一路径是“LLM 多智能体协作 + 确定性研究层”的主闭环，负责从研究假设一路走到因子验证、回测与反馈沉淀。
 
 ## 1. 这个 mode 是做什么的
@@ -39,20 +39,16 @@ python3 scripts/run_alpha_factor_mining_loop.py --loop-count 1
 
 ### 2.3 常用 CLI 参数
 
-| 参数 | 作用 | 说明 |
-| --- | --- | --- |
-| `--loop-count` | 运行多少轮 mining loop | 每轮都会完整跑一次智能体闭环 |
-| `--panel-data-path` | panel 数据路径 | 默认是 `data/panel_data.parquet` |
-| `--text-data-path` | 非结构化文本路径 | JSONL/CSV 新闻或市场文本，会转成 panel 特征 |
-| `--debug-symbol-count` | debug panel symbol 上限 | 默认 20 |
-| `--debug-time-steps` | debug panel 时间点上限 | 默认 180 |
-| `--write-data-artifacts` | 写出数据接口产物 | 即使没有文本数据也生成 `data_bundle/` |
-| `--initial-direction` | 初始研究方向 | 第 1 轮会优先注入到 hypothesis |
-| `--initial-hypothesis` | 初始假设文本 | 作为第一轮种子假设 |
-| `--stop-on-error` | 遇错是否直接停止 | 默认失败后继续记录并进入下一轮 |
-| `--retry-per-round` | 每轮失败后重试次数 | 适合临时 provider / 结构化输出错误恢复 |
-| `--debug` | 输出更详细的调试日志 | 会额外写调试日志文件 |
-| `--run-id` | 脚本运行 ID | 主要用于和 `main.py` 共用日志目录 |
+| 参数                     | 作用                   | 说明                                   |
+| ------------------------ | ---------------------- | -------------------------------------- |
+| `--loop-count`         | 运行多少轮 mining loop | 每轮都会完整跑一次智能体闭环           |
+| `--panel-data-path`    | panel 数据路径         | 默认是 `data/panel_data.parquet`     |
+| `--initial-direction`  | 初始研究方向           | 第 1 轮会优先注入到 hypothesis         |
+| `--initial-hypothesis` | 初始假设文本           | 作为第一轮种子假设                     |
+| `--stop-on-error`      | 遇错是否直接停止       | 默认失败后继续记录并进入下一轮         |
+| `--retry-per-round`    | 每轮失败后重试次数     | 适合临时 provider / 结构化输出错误恢复 |
+| `--debug`              | 输出更详细的调试日志   | 会额外写调试日志文件                   |
+| `--run-id`             | 脚本运行 ID            | 主要用于和 `main.py` 共用日志目录    |
 
 ## 3. 一轮 mining 的实际流程
 
@@ -64,16 +60,9 @@ python3 scripts/run_alpha_factor_mining_loop.py --loop-count 1
 
 1. 读取 `.env` 和 `.env.local`
 2. 初始化模型客户端
-3. 通过 `UnifiedMarketDataAdapter` 加载 panel，必要时合并 `--text-data-path`
-4. 生成 `source_data_desc`、`feature_schema` 和共享上下文 `shared_payload`
+3. 加载 panel 数据适配器
+4. 生成共享上下文 `shared_payload`
 5. 建立本轮日志目录
-
-如果启用文本数据，`available_features` 会额外包含：
-
-```text
-news_count, news_sentiment_score, risk_event_count,
-policy_event_flag, liquidity_event_score
-```
 
 ### 3.2 HypothesisAgentV2
 
