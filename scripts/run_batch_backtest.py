@@ -802,13 +802,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--panel-data", type=str, default=str(DEFAULT_PANEL_PATH),
                         help="Path to panel data parquet")
     parser.add_argument("--text-data-path", type=str, default="",
-                        help="Optional local JSONL/CSV market text data to merge into the panel")
+                        help="Deprecated mining-only input; ignored by batch-backtest mode.")
     parser.add_argument("--debug-symbol-count", type=int, default=20,
-                        help="Maximum symbols in generated debug panel")
+                        help="Deprecated mining-only option; ignored by batch-backtest mode.")
     parser.add_argument("--debug-time-steps", type=int, default=180,
-                        help="Maximum time steps in generated debug panel")
+                        help="Deprecated mining-only option; ignored by batch-backtest mode.")
     parser.add_argument("--write-data-artifacts", action="store_true", default=False,
-                        help="Write data_bundle artifacts even when no text data is provided")
+                        help="Deprecated mining-only option; ignored by batch-backtest mode.")
     parser.add_argument("--library-paths", type=str, nargs="*",
                         help="Paths to factor library JSON files (default: all known libraries)")
     parser.add_argument("--ic-threshold", type=float, default=0.003,
@@ -832,17 +832,10 @@ def main() -> None:
 
     panel_data_path = Path(args.panel_data)
     if args.text_data_path or args.write_data_artifacts:
-        from adapters import UnifiedMarketDataAdapter
-
-        bundle = UnifiedMarketDataAdapter(
-            panel_data_path,
-            text_data_path=args.text_data_path or None,
-            artifact_dir=Path(args.output_dir) / "data_bundle",
-            write_artifacts=True,
-            debug_symbol_count=args.debug_symbol_count,
-            debug_time_steps=args.debug_time_steps,
-        ).load()
-        panel_data_path = Path(bundle.artifacts.get("merged_panel", panel_data_path))
+        logger.warning(
+            "Ignoring mining-only text ingestion flags in batch-backtest mode; "
+            "use a pre-materialized structured panel if text-derived features are needed."
+        )
 
     run_batch_backtest(
         library_paths=library_paths,

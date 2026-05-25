@@ -1,6 +1,6 @@
 # Data Interface Mode Guide
 
-本文件说明项目新增的 RD-Agent 风格轻量数据接口。它不是新的运行 mode，而是 `mining`、`evolution`、`batch-backtest` 三个 mode 共用的数据入口。
+本文件说明项目新增的 RD-Agent 风格轻量数据接口。它不是新的运行 mode。当前版本里，原始非结构化文本只接入 `mining` mode；`evolution` 和 `batch-backtest` 只消费结构化 panel 与因子库。
 
 ## 1. 设计目标
 
@@ -8,9 +8,9 @@
 
 - 主数据仍然是 `data/panel_data.parquet`
 - index 固定为 `datetime, symbol`
-- 非结构化新闻 / 研报摘要 / 市场文本先转成结构化特征
+- 非结构化新闻 / 研报摘要 / 市场文本先转成结构化特征，供 `mining` mode 的 LLM 上下文使用
 - LLM 看到的是自动生成的 `source_data_desc`
-- 代码执行看到的是合并后的 `merged_panel.parquet`
+- `mining` 入口可以同时拿到 `merged_panel.parquet` 和 `source_data_desc`
 
 这个设计借鉴 RD-Agent 的数据契约思想，但不依赖 RD-Agent，不引入 Docker / A股 qlib 数据栈。
 
@@ -67,7 +67,7 @@ v1 使用确定性词典规则提取特征，不在 adapter 内调用 LLM。
 
 ## 4. CLI 用法
 
-三个 mode 都可以使用同一组参数：
+当前原始文本输入只推荐在 `mining` mode 使用：
 
 ```bash
 --text-data-path data/unstructured/sample_crypto_news.jsonl
@@ -82,15 +82,6 @@ v1 使用确定性词典规则提取特征，不在 adapter 内调用 LLM。
 PYTHONPATH=src python3 main.py --mode mining \
   --loop-count 1 \
   --text-data-path data/unstructured/sample_crypto_news.jsonl
-
-PYTHONPATH=src python3 scripts/run_factor_evolution.py \
-  --num-generations 1 \
-  --population-size 2 \
-  --text-data-path data/unstructured/sample_crypto_news.jsonl
-
-PYTHONPATH=src python3 main.py --mode batch-backtest \
-  --text-data-path data/unstructured/sample_crypto_news.jsonl \
-  --min-factors 1
 ```
 
 ## 5. Artifacts
@@ -102,12 +93,11 @@ PYTHONPATH=src python3 main.py --mode batch-backtest \
 - `data_bundle/source_data_desc.md`
 - `data_bundle/feature_schema.json`
 
-`evolution` 入口会把 artifacts 写到 `logs/evolution_loop/EVO_*/data_bundle/`。  
-`mining` 和 `main.py --mode batch-backtest` 会写到本次 `logs/alpha_factor_mining_loop/<run_id>/data_bundle/`。
+`mining` 入口会把 artifacts 写到本次 `logs/alpha_factor_mining_loop/<run_id>/data_bundle/`。
 
 ## 6. 和因子表达式的关系
 
-启用文本数据后，文本特征会进入 `available_features`。因此 LLM 或 GA 可以生成这样的表达式：
+启用文本数据后，文本特征会进入 `available_features`。因此 `mining` 里的 LLM 可以生成这样的候选表达式：
 
 ```python
 "RANK($news_sentiment_score) - RANK($risk_event_count)"
@@ -115,3 +105,13 @@ PYTHONPATH=src python3 main.py --mode batch-backtest \
 ```
 
 如果不传 `--text-data-path`，默认行为与原项目一致，只使用 crypto panel 的结构化列。
+
+## 7. 和 evolution / batch-backtest 的边界
+
+当前建议的项目边界是：
+
+- 原始非结构化文本：只给 `mining` mode
+- `evolution`：只优化结构化表达式、因子子集、模型参数
+- `batch-backtest`：只验证结构化 panel + 已接受因子库
+
+如果未来某个文本衍生因子必须进入 `evolution` 或 `batch-backtest`，请先把它固化成结构化 panel 列，再把这份 enriched panel 作为新的 `panel_data.parquet` 输入后续 mode，而不是让后续 mode 直接读取原始文本。

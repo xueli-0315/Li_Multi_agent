@@ -116,7 +116,7 @@ data/panel_data.parquet
 
 ### 轻量数据接口与非结构化文本
 
-项目提供一层轻量数据接口，代码在 `src/adapters/data_interface.py`。默认仍读取 `data/panel_data.parquet`；如果提供 `--text-data-path`，会把本地 JSONL/CSV 新闻或市场文本转成结构化特征并合并回 panel。
+项目提供一层轻量数据接口，代码在 `src/adapters/data_interface.py`。默认仍读取 `data/panel_data.parquet`。原始非结构化文本目前只接入 `mining` mode：如果提供 `--text-data-path`，系统会把本地 JSONL/CSV 新闻或市场文本转成结构化特征，用于帮助 LLM 理解研究背景与候选方向。
 
 支持的文本输入字段：
 
@@ -131,7 +131,7 @@ news_count, news_sentiment_score, risk_event_count,
 policy_event_flag, liquidity_event_score
 ```
 
-三个 mode 都支持：
+当前只有 `mining` mode 直接支持原始文本输入：
 
 ```bash
 --text-data-path data/unstructured/sample_crypto_news.jsonl
@@ -140,7 +140,7 @@ policy_event_flag, liquidity_event_score
 --write-data-artifacts
 ```
 
-启用后会生成 `data_bundle/merged_panel.parquet`、`debug_panel.parquet`、`source_data_desc.md`、`feature_schema.json`。LLM 会通过 `source_data_desc` 看到数据说明，ExpressionGA 和 backtest 会使用合并后的 panel。详细说明见 `docs/data_interface.md`。
+启用后会生成 `data_bundle/merged_panel.parquet`、`debug_panel.parquet`、`source_data_desc.md`、`feature_schema.json`。LLM 会通过 `source_data_desc` 看到数据说明，并结合文本衍生特征设计候选因子。`evolution` 和 `batch-backtest` 默认只使用结构化 panel 与已沉淀因子库；如果将来需要让它们使用文本信息，请先把文本衍生特征固化进结构化 panel。详细说明见 `docs/data_interface.md`。
 
 ## 表达式 DSL
 

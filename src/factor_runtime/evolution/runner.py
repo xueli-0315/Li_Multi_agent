@@ -9,7 +9,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from adapters import UnifiedMarketDataAdapter
 from factor_runtime.evolution.expression_ga import ExpressionGA
 from factor_runtime.evolution.factor_subset_ga import FactorSubsetGA
 from factor_runtime.evolution.model_param_ga import ModelParamGA
@@ -66,7 +65,7 @@ class EvolutionRunner:
                 "seed": config.seed,
             },
         )
-        self._prepare_data_bundle(config, run_dir, progress_log, run_id, logger)
+        self._warn_if_mining_only_text_flags(config, progress_log, run_id, logger)
         try:
             panel = self._load_panel(config.panel_data_path)
         except Exception as exc:
@@ -357,47 +356,28 @@ class EvolutionRunner:
         for path in [config.log_root, config.evolved_dir, config.factor_library_path.parent, config.model_params_dir, config.wiki_dir]:
             Path(path).mkdir(parents=True, exist_ok=True)
 
-    def _prepare_data_bundle(
+    def _warn_if_mining_only_text_flags(
         self,
         config: EvolutionConfig,
-        run_dir: Path,
         progress_log: Path,
         run_id: str,
         logger: StructuredLogger,
     ) -> None:
         if not config.text_data_path and not config.write_data_artifacts:
             return
-        bundle = UnifiedMarketDataAdapter(
-            config.panel_data_path,
-            text_data_path=config.text_data_path,
-            artifact_dir=run_dir / "data_bundle",
-            write_artifacts=True,
-            debug_symbol_count=config.debug_symbol_count,
-            debug_time_steps=config.debug_time_steps,
-        ).load()
-        merged_path = bundle.artifacts.get("merged_panel")
-        if merged_path:
-            config.panel_data_path = Path(merged_path)
-        if bundle.feature_schema.text_feature_columns:
-            base_features = [col for col in config.available_features if col in bundle.panel.columns]
-            config.available_features = base_features + [
-                col for col in bundle.feature_schema.text_feature_columns if col not in base_features
-            ]
         payload = {
-            "panel_data_path": str(config.panel_data_path),
             "text_data_path": str(config.text_data_path) if config.text_data_path else "",
-            "text_feature_columns": list(bundle.feature_schema.text_feature_columns),
-            "artifacts": dict(bundle.artifacts),
-            "warnings": list(bundle.warnings),
+            "write_data_artifacts": bool(config.write_data_artifacts),
+            "message": "mining-only text ingestion flags ignored",
         }
         self._append_progress_event(
             progress_log,
             run_id,
-            "data_bundle_prepared",
+            "text_ingestion_ignored",
             agent_name="data_adapter",
             payload=payload,
         )
-        logger.info("Data bundle prepared", category="data_interface", payload=payload)
+        logger.info("Mining-only text ingestion flags ignored", category="data_interface", payload=payload)
 
     def _load_panel(self, path: Path) -> pd.DataFrame:
         panel = pd.read_parquet(path)

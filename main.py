@@ -385,8 +385,11 @@ def _run_evolution(
     log_base: Path,
     progress_logger: Callable[[dict[str, Any]], None],
     raw_io_logger: Callable[[dict[str, Any]], None],
+    evolve_target: str = "factor",
+    factor_ga_mode: str = "hybrid",
     num_generations: int = 5,
     population_size: int = 10,
+    seed: int = 42,
 ) -> None:
     """调用 scripts/run_factor_evolution.py 的进化流程。"""
     if str(PROJECT_ROOT) not in sys.path:
@@ -397,8 +400,13 @@ def _run_evolution(
 
     config = EvolutionConfig()
     config.panel_data_path = Path(panel_data_path)
+    config.evolve_target = str(evolve_target)
+    config.ga_mode = str(factor_ga_mode)
+    config.factor_ga_mode = str(factor_ga_mode)
     config.num_generations = num_generations
     config.population_size = population_size
+    config.seed = int(seed)
+    config.final_audit_top_n = 0
 
     run_evolution(config)
 
@@ -448,6 +456,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", choices=["mining", "evolution", "batch-backtest"], default="mining",
                         help="Run mode: mining (default), evolution, or batch-backtest.")
     parser.add_argument("--panel-data-path", default=str(PROJECT_ROOT / "data" / "panel_data.parquet"))
+    parser.add_argument("--text-data-path", default="",
+                        help="Mining mode only: optional local JSONL/CSV market text data.")
+    parser.add_argument("--debug-symbol-count", type=int, default=20,
+                        help="Mining mode only: maximum symbols in generated debug panel.")
+    parser.add_argument("--debug-time-steps", type=int, default=180,
+                        help="Mining mode only: maximum time steps in generated debug panel.")
+    parser.add_argument("--write-data-artifacts", action="store_true", default=False,
+                        help="Mining mode only: write data_bundle artifacts even without text data.")
     parser.add_argument("--loop-count", type=int, default=1)
     parser.add_argument("--initial-direction", default="", help="Optional initial hypothesis direction.")
     parser.add_argument("--initial-hypothesis", default="", help="Optional seed hypothesis injected into first loop.")
@@ -458,6 +474,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Evolution mode: number of generations (default: 5)")
     parser.add_argument("--evo-population", type=int, default=10,
                         help="Evolution mode: population size (default: 10)")
+    parser.add_argument("--evolve-target", choices=["factor", "model_params"], default="factor",
+                        help="Evolution mode: optimize factors (default) or model parameters.")
+    parser.add_argument("--factor-ga-mode", choices=["hybrid", "expression", "subset"], default="hybrid",
+                        help="Evolution factor target: expression, subset, or hybrid.")
+    parser.add_argument("--evo-seed", type=int, default=42,
+                        help="Evolution mode: random seed (default: 42)")
     parser.add_argument("--min-factors", type=int, default=10,
                         help="Batch backtest: minimum factors required (default: 10)")
     parser.add_argument("--ic-threshold", type=float, default=0.003,
@@ -491,18 +513,33 @@ def main() -> None:
     raw_io_logger = _chain_loggers(llm_raw_io_jsonl_logger, raw_io_debug_logger)
 
     if args.mode == "evolution":
+        if args.text_data_path or args.write_data_artifacts:
+            print(
+                "[evolution] ignoring mining-only text ingestion flags; "
+                "evolution uses structured panel data and factor libraries only.",
+                file=sys.stderr,
+            )
         _run_evolution(
             panel_data_path=args.panel_data_path,
             debug_enabled=debug_enabled,
             log_base=log_base,
             progress_logger=progress_logger,
             raw_io_logger=raw_io_logger,
+            evolve_target=args.evolve_target,
+            factor_ga_mode=args.factor_ga_mode,
             num_generations=args.evo_generations,
             population_size=args.evo_population,
+            seed=args.evo_seed,
         )
         return
 
     if args.mode == "batch-backtest":
+        if args.text_data_path or args.write_data_artifacts:
+            print(
+                "[batch-backtest] ignoring mining-only text ingestion flags; "
+                "batch backtest uses structured panel data and accepted factor libraries only.",
+                file=sys.stderr,
+            )
         _run_batch_backtest(
             panel_data_path=args.panel_data_path,
             log_base=log_base,
@@ -525,6 +562,12 @@ def main() -> None:
     ]
     if args.stop_on_error:
         cmd.append("--stop-on-error")
+    if args.text_data_path:
+        cmd.extend(["--text-data-path", args.text_data_path])
+    if args.write_data_artifacts:
+        cmd.append("--write-data-artifacts")
+    cmd.extend(["--debug-symbol-count", str(args.debug_symbol_count)])
+    cmd.extend(["--debug-time-steps", str(args.debug_time_steps)])
     print(f"Running mining mode: {' '.join(cmd)}", file=sys.stderr)
     result = subprocess.run(cmd)
     sys.exit(result.returncode)

@@ -43,6 +43,10 @@ python3 scripts/run_alpha_factor_mining_loop.py --loop-count 1
 | ------------------------ | ---------------------- | -------------------------------------- |
 | `--loop-count`         | 运行多少轮 mining loop | 每轮都会完整跑一次智能体闭环           |
 | `--panel-data-path`    | panel 数据路径         | 默认是 `data/panel_data.parquet`     |
+| `--text-data-path`    | 原始非结构化文本路径   | JSONL/CSV，仅 mining mode 使用 |
+| `--debug-symbol-count`| debug panel symbol 上限 | 默认 20，用于 data bundle |
+| `--debug-time-steps`  | debug panel 时间点上限 | 默认 180，用于 data bundle |
+| `--write-data-artifacts` | 写出数据接口产物 | 生成 `data_bundle/` |
 | `--initial-direction`  | 初始研究方向           | 第 1 轮会优先注入到 hypothesis         |
 | `--initial-hypothesis` | 初始假设文本           | 作为第一轮种子假设                     |
 | `--stop-on-error`      | 遇错是否直接停止       | 默认失败后继续记录并进入下一轮         |
@@ -60,9 +64,18 @@ python3 scripts/run_alpha_factor_mining_loop.py --loop-count 1
 
 1. 读取 `.env` 和 `.env.local`
 2. 初始化模型客户端
-3. 加载 panel 数据适配器
+3. 通过 `CryptoCrossSectionDomainAdapter` 加载 panel 数据，必要时再接入原始文本
 4. 生成共享上下文 `shared_payload`
 5. 建立本轮日志目录
+
+如果传入 `--text-data-path`，初始化阶段会先把文本转成结构化特征，再生成：
+
+- `source_data_desc`
+- `feature_schema`
+- `data_bundle/merged_panel.parquet`
+- `data_bundle/debug_panel.parquet`
+
+这些内容会进入 `shared_payload`，供 `HypothesisAgentV2` 和 `ExperimentDesignerAgent` 读取。
 
 ### 3.2 HypothesisAgentV2
 

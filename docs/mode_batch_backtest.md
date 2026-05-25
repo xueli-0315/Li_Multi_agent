@@ -40,10 +40,10 @@ python3 scripts/run_batch_backtest.py
 | `--ic-threshold` | IC 门槛 | 因子进入模型前的基础筛选阈值 |
 | `--icir-threshold` | ICIR 门槛 | 因子进入模型前的稳定性阈值 |
 | `--panel-data-path` | panel 数据路径 | 默认是 `data/panel_data.parquet` |
-| `--text-data-path` | 非结构化文本路径 | JSONL/CSV，会先合并成 merged panel |
-| `--debug-symbol-count` | debug panel symbol 上限 | 默认 20 |
-| `--debug-time-steps` | debug panel 时间点上限 | 默认 180 |
-| `--write-data-artifacts` | 写出数据接口产物 | 即使没有文本数据也生成 `data_bundle/` |
+| `--text-data-path` | 兼容旧命令 | 现在是 mining-only 输入，batch-backtest 会忽略 |
+| `--debug-symbol-count` | 兼容旧命令 | mining-only 参数，batch-backtest 会忽略 |
+| `--debug-time-steps` | 兼容旧命令 | mining-only 参数，batch-backtest 会忽略 |
+| `--write-data-artifacts` | 兼容旧命令 | mining-only 参数，batch-backtest 会忽略 |
 
 ### 2.4 scripts/run_batch_backtest.py 常用参数
 
@@ -51,10 +51,10 @@ python3 scripts/run_batch_backtest.py
 | --- | --- | --- |
 | `--min-factors` | 最少因子数 | 少于这个数量则直接跳过 |
 | `--panel-data` | panel 数据路径 | 与 main.py 对应 |
-| `--text-data-path` | 非结构化文本路径 | 启用后回测读取合并后的 panel |
-| `--debug-symbol-count` | debug panel symbol 上限 | 数据接口产物使用 |
-| `--debug-time-steps` | debug panel 时间点上限 | 数据接口产物使用 |
-| `--write-data-artifacts` | 写出数据接口产物 | 生成 `data_bundle/` |
+| `--text-data-path` | 兼容旧命令 | 现在会被忽略 |
+| `--debug-symbol-count` | 兼容旧命令 | 现在会被忽略 |
+| `--debug-time-steps` | 兼容旧命令 | 现在会被忽略 |
+| `--write-data-artifacts` | 兼容旧命令 | 现在会被忽略 |
 | `--library-paths` | 指定因子库文件 | 不传则使用默认库集合 |
 | `--ic-threshold` | IC 筛选阈值 | 默认 0.003 |
 | `--icir-threshold` | ICIR 筛选阈值 | 默认 0.02 |
@@ -62,7 +62,7 @@ python3 scripts/run_batch_backtest.py
 
 ## 3. 这个 mode 的实际流程
 
-如果传入 `--text-data-path`，入口会先通过 `UnifiedMarketDataAdapter` 写出 `data_bundle/merged_panel.parquet`。后续因子计算、IC 筛选、LightGBM 训练和 signal analysis 都使用这个合并后的 panel。
+原始非结构化文本不再直接进入 `batch-backtest`。如果你传入 `--text-data-path`，脚本会提示这是 mining-only 参数并忽略。`batch-backtest` 只读取结构化 panel 与本地因子库。
 
 ### 3.1 读取因子库
 

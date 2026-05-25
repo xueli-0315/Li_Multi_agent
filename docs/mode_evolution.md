@@ -37,10 +37,6 @@ python3 scripts/run_factor_evolution.py --evolve-target factor --factor-ga-mode 
 | `--factor-ga-mode` | 因子优化内部模式 | `hybrid` / `expression` / `subset` |
 | `--evo-seed` | 随机种子 | 保证可复现 |
 | `--panel-data-path` | panel 数据路径 | 默认是 `data/panel_data.parquet` |
-| `--text-data-path` | 非结构化文本路径 | JSONL/CSV，会在 evolution run 目录生成 merged panel |
-| `--debug-symbol-count` | debug panel symbol 上限 | 默认 20 |
-| `--debug-time-steps` | debug panel 时间点上限 | 默认 180 |
-| `--write-data-artifacts` | 写出数据接口产物 | 即使没有文本数据也生成 `data_bundle/` |
 
 ### 2.4 scripts/run_factor_evolution.py 常用参数
 
@@ -63,14 +59,14 @@ python3 scripts/run_factor_evolution.py --evolve-target factor --factor-ga-mode 
 | `--min-factor-fitness` | 因子入库阈值 | 通过阈值的表达式才写入变异库 |
 | `--min-factor-coverage` | 因子覆盖率阈值 | 过滤掉覆盖太低的表达式 |
 | `--min-factor-rank-ic-abs` | Rank IC 门槛 | 过滤掉方向性太弱的表达式 |
-| `--text-data-path` | 非结构化文本路径 | 启用后文本特征进入 GA 白名单 |
-| `--debug-symbol-count` | debug panel symbol 上限 | 数据接口产物使用 |
-| `--debug-time-steps` | debug panel 时间点上限 | 数据接口产物使用 |
-| `--write-data-artifacts` | 写出数据接口产物 | 生成 `data_bundle/` |
+| `--text-data-path` | 兼容旧命令 | 现在是 mining-only 输入，evolution 会忽略 |
+| `--debug-symbol-count` | 兼容旧命令 | mining-only 参数，evolution 会忽略 |
+| `--debug-time-steps` | 兼容旧命令 | mining-only 参数，evolution 会忽略 |
+| `--write-data-artifacts` | 兼容旧命令 | mining-only 参数，evolution 会忽略 |
 
 ## 3. factor 目标的流程
 
-如果传入 `--text-data-path`，`EvolutionRunner` 会先在 `logs/evolution_loop/EVO_*/data_bundle/` 写出 `merged_panel.parquet`，后续 ExpressionGA、SubsetGA、ModelParamGA 都使用这个合并后的 panel。文本特征会加入 `available_features`，例如 `$news_sentiment_score` 可以被表达式使用。
+原始非结构化文本不再直接进入 `evolution`。如果你给 `evolution` 传 `--text-data-path`，入口只会提示这是 mining-only 参数并忽略。`evolution` 只使用结构化 panel 与因子库。
 
 当 `--evolve-target factor` 时，流程通常分两段。
 
