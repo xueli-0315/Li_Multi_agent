@@ -44,7 +44,7 @@ from workflows import AlphaFactorMiningWorkflow
 主工作流是 `workflows.AlphaFactorMiningWorkflow`，入口实现位于 `src/workflows/alpha_factor_mining_workflow.py`。
 
 ```text
-HypothesisAgentV2
+HypothesisAgent
   -> ExperimentDesignerAgent
   -> FactorCoderAgent
   -> BacktestRunnerAgent
