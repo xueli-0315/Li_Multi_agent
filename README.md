@@ -54,13 +54,13 @@ HypothesisAgentV2
 
 五个 Agent 的职责：
 
-| Agent | 主要职责 | 核心输出 |
-| --- | --- | --- |
-| `HypothesisAgentV2` | 根据方向、历史反馈、负面知识提出研究假设 | `hypothesis`, `hypothesis_structured` |
-| `ExperimentDesignerAgent` | 把假设拆成可验证的因子候选和任务计划 | `experiment_spec`, `task_plan`, `qlib_factor_experiment` |
-| `FactorCoderAgent` | 验证表达式 DSL、生成可执行实现、做预处理质量判断 | `factor_implementation`, `calculation_report` |
-| `BacktestRunnerAgent` | 调用 qlib/ResearchPipeline/LightGBM 路径评估因子 | `backtest_report`, `metrics` |
-| `FeedbackSummarizerAgent` | 把本轮结果压缩为下一轮可用反馈 | `feedback`, `distilled_knowledge` |
+| Agent                       | 主要职责                                         | 核心输出                                                       |
+| --------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| `HypothesisAgent`         | 根据方向、历史反馈、负面知识提出研究假设         | `hypothesis`, `hypothesis_structured`                      |
+| `ExperimentDesignerAgent` | 把假设拆成可验证的因子候选和任务计划             | `experiment_spec`, `task_plan`, `qlib_factor_experiment` |
+| `FactorCoderAgent`        | 验证表达式 DSL、生成可执行实现、做预处理质量判断 | `factor_implementation`, `calculation_report`              |
+| `BacktestRunnerAgent`     | 调用 qlib/ResearchPipeline/LightGBM 路径评估因子 | `backtest_report`, `metrics`                               |
+| `FeedbackSummarizerAgent` | 把本轮结果压缩为下一轮可用反馈                   | `feedback`, `distilled_knowledge`                          |
 
 Agent 之间共享数据受 `src/workflows/context_policies.py` 控制。新增共享字段时，必须同步更新 reader/writer allowlist，否则字段会在上下文组装或写回时被静默丢弃。
 
@@ -191,11 +191,11 @@ ZHIPU_MODEL=glm-4-flash
 
 支持的 LLM provider：
 
-| Provider | 必需变量 | 常用可选变量 |
-| --- | --- | --- |
-| `zhipu` | `ZHIPU_API_KEY` | `ZHIPU_MODEL`, `LLM_MODEL` |
-| `azure_openai` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION` | `AZURE_OPENAI_DEPLOYMENT`, `LLM_MODEL` |
-| openai-compatible | `OPENAI_API_KEY`, `LLM_MODEL` | `OPENAI_BASE_URL` |
+| Provider          | 必需变量                                                                          | 常用可选变量                               |
+| ----------------- | --------------------------------------------------------------------------------- | ------------------------------------------ |
+| `zhipu`         | `ZHIPU_API_KEY`                                                                 | `ZHIPU_MODEL`, `LLM_MODEL`             |
+| `azure_openai`  | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION` | `AZURE_OPENAI_DEPLOYMENT`, `LLM_MODEL` |
+| openai-compatible | `OPENAI_API_KEY`, `LLM_MODEL`                                                 | `OPENAI_BASE_URL`                        |
 
 `AGENT_MODEL_MAP` 可以传 JSON 对象，为不同 agent 指定不同模型。
 
@@ -242,13 +242,13 @@ python3 main.py --mode batch-backtest \
   --icir-threshold 0.02
 ```
 
-Data interface 的文本特征列和词典已经支持 YAML 配置。建议不要把长词典直接塞进 `.env`，而是在 `.env` 里只放配置文件路径，例如：
+如果后续要把 data interface 的文本特征列和词典做成可配置项，建议不要直接塞进 `.env`，而是在 `.env` 里只放配置文件路径，例如：
 
 ```env
 DATA_INTERFACE_CONFIG_PATH=configs/data_interface.yaml
 ```
 
-如果不设置这个变量，默认会读取 `configs/data_interface.yaml`。对应的配置文件长这样：
+对应的配置文件可以长这样：
 
 ```yaml
 text_feature_columns:
@@ -309,7 +309,7 @@ lexicon:
     - volume
 ```
 
-当前支持通过 YAML 自定义 `text_feature_columns`、`required_columns` 和 `lexicon`。如果配置文件缺失或格式错误，代码会回退到内置默认值，并在 data bundle 的 warnings 中记录原因。
+注意：`DATA_INTERFACE_CONFIG_PATH` 是推荐的配置形态示例，当前版本还没有读取这个 YAML。现在 data interface 的词典和文本特征列仍在 `src/adapters/data_interface.py` 中定义；要让上述 YAML 生效，需要后续增加配置加载逻辑。
 
 ## 本地工作目录
 
