@@ -372,8 +372,9 @@ def main() -> None:
         traces.append(trace)
         _save_trace_log(trace, log_dir, loop_index)
         _persist_factor_library(trace, factor_library_file, panel_data_path, loop_index)
-        trajectory_pool.add(shared_payload, loop_index)
-        shared_payload = dict(trace.final_shared_context)
+        final_shared_payload = dict(trace.final_shared_context or shared_payload)
+        trajectory_pool.add(final_shared_payload, loop_index)
+        shared_payload = final_shared_payload
         error_count = len([r for r in trace.records if r.error is not None])
         loop_duration_s = (datetime.now() - loop_started_at).total_seconds()
         final_metrics = shared_payload.get("metrics", {})
