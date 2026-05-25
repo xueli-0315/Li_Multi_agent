@@ -2,6 +2,10 @@
 EXECUTION_PLAN_v1.md
 .env.local
 .DS_Store
+AGENTS.md
+agent.md
+CLAUDE.md
+claude.md
 __pycache__/
 *.py[cod]
 artifacts/
@@ -9,6 +13,7 @@ logs/
 results/
 mlruns/
 *.egg-info/
+factor_library/raw/
 factor_library/wiki/
 factor_library/raw/evolved/
 factor_library/raw/factor_codes/

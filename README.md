@@ -2,8 +2,6 @@
 
 这是一个基于 LLM 智能体协作的量化因子挖掘项目。LLM 层负责提出假设、设计因子、验证表达式、调用回测和总结反馈；确定性研究层负责因子计算、预处理、筛选、模型/信号评估和因子库沉淀。
 
-当前项目已经重构为 `src/` 下的顶层包结构，不再把所有模块塞进 `src/trading_agents/`。`thesis` 项目只作为方法借鉴来源，不作为运行时依赖。
-
 ## 当前架构
 
 ```text
@@ -24,13 +22,13 @@
 │   ├── trading_agents_research/  确定性研究层：计算、预处理、筛选、报告
 │   └── workflows/                多智能体循环、运行时、上下文 policy、轨迹池
 ├── data/                         默认 panel 数据位置
-├── factor_library/               已接收因子、生成代码、负面知识和 wiki
+├── factor_library/               本地因子库与知识沉淀目录
 ├── logs/                         循环运行日志
 ├── tests/                        unittest 测试
 └── docs/                         设计和优化文档
 ```
 
-新代码应优先使用当前顶层包导入：
+安装完成后，开发脚本可以直接从这些包导入：
 
 ```python
 from agents import BacktestRunnerAgent
@@ -83,24 +81,22 @@ Agent 之间共享数据受 `src/workflows/context_policies.py` 控制。新增�
 - `screening.py`: IC、Rank IC、ICIR、覆盖率、换手率、正 IC 比例
 - `pipeline.py`: 串起计算、预处理、筛选、factor-score 回测兼容输出
 
-`thesis` 项目里的因子构建、预处理、模型和回测思想可以继续借鉴，但不要直接 import 或复制 `paper_tool` 作为依赖。
-
 ## GA 优化模式
 
 优化入口仍是 `scripts/run_factor_evolution.py`，但核心逻辑已经下沉到 `src/factor_runtime/evolution/`：
 
 - `models.py`: `EvolutionConfig`, `EvolutionResult`, `FactorGenome`, `SubsetGenome`, `ModelParamGenome`
 - `expression_ga.py`: 表达式种群、精英保留、锦标赛选择、交叉/变异和复杂度护栏
-- `factor_subset_ga.py`: thesis 风格 bitmask 子集选择，使用入选因子的横截面 rank 均值作为组合 signal
-- `model_param_ga.py`: thesis 风格模型参数 GA，默认支持 LightGBM 参数空间
+- `factor_subset_ga.py`: bitmask 子集选择，使用入选因子的横截面 rank 均值作为组合 signal
+- `model_param_ga.py`: 模型参数 GA，默认支持 LightGBM 参数空间
 - `fitness.py`: 统一 fitness 公式，综合 Rank IC、ICIR、多空 IR、覆盖率、正 IC 比例、换手、复杂度、相关性和过拟合惩罚
 - `runner.py`: 读取 panel/种子库，按 `factor` 或 `model_params` 目标运行优化并写出产物
 
 默认 `--evolve-target factor --factor-ga-mode hybrid` 会先演化表达式，再对候选池做因子子集选择。`--factor-ga-mode expression` 只生成和快评新表达式；`--factor-ga-mode subset` 只对已有候选池做组合选择。旧参数 `--ga-mode hybrid|expression|subset` 仍兼容，会映射到 factor 目标。
 
-`evolution` 不再内置 final audit/backtesting。每代快评只使用 deterministic IC/signal 指标。通过阈值的新表达式会写入 `factor_library/raw/mutated_factors_library.json`，并在 run 目录生成 `accepted_factors.json`。子集 GA 结果只写本次 run artifact，不污染单因子库。真正的 LightGBM/qlib/portfolio 回测留给 `batch-backtest` 模式。因子优化结束后会自动刷新 `factor_library/wiki/evolved_factors/`，并在 LLM screening 开启且 API key 可用时自动更新 `distilled_lessons_evolution.md`。
+`evolution` 不再内置 final audit/backtesting。每代快评只使用 deterministic IC/signal 指标。通过阈值的新表达式会写入你本地的因子库目录；子集 GA 结果只写本次 run artifact，不污染单因子库。真正的 LightGBM/qlib/portfolio 回测留给 `batch-backtest` 模式。
 
-`--evolve-target model_params` 会在当前候选因子池上优化模型参数，输出 `best_model_params.json`、`model_param_population.csv`、`model_param_summary.json`，并把最优参数另存到 `factor_library/raw/model_params/`。
+`--evolve-target model_params` 会在当前候选因子池上优化模型参数，输出 `best_model_params.json`、`model_param_population.csv`、`model_param_summary.json`。
 
 ## 数据格式
 
@@ -120,7 +116,7 @@ data/panel_data.parquet
 
 ### 轻量数据接口与非结构化文本
 
-项目现在有 RD-Agent 风格的轻量数据接口，代码在 `src/adapters/data_interface.py`。默认仍读取 `data/panel_data.parquet`；如果提供 `--text-data-path`，会把本地 JSONL/CSV 新闻或市场文本转成结构化特征并合并回 panel。
+项目提供一层轻量数据接口，代码在 `src/adapters/data_interface.py`。默认仍读取 `data/panel_data.parquet`；如果提供 `--text-data-path`，会把本地 JSONL/CSV 新闻或市场文本转成结构化特征并合并回 panel。
 
 支持的文本输入字段：
 
@@ -202,6 +198,25 @@ ZHIPU_MODEL=glm-4-flash
 | openai-compatible | `OPENAI_API_KEY`, `LLM_MODEL` | `OPENAI_BASE_URL` |
 
 `AGENT_MODEL_MAP` 可以传 JSON 对象，为不同 agent 指定不同模型。
+
+## 本地工作目录
+
+下面这些目录更适合作为本地工作区使用，通常不建议直接提交到公共仓库：
+
+- `factor_library/raw/`：你的种子因子、变异因子、模型参数、负面知识
+- `logs/`：运行日志
+- `results/`：批量回测输出
+- `mlruns/`：实验跟踪产物
+
+其中 `factor_library/raw/` 的内容通常因人而异。如果你要在新机器上运行项目，建议至少准备这些本地文件：
+
+```text
+factor_library/raw/all_factors_library.json
+factor_library/raw/mutated_factors_library.json
+factor_library/raw/mutated_factor_library_old.json
+```
+
+如果这些文件暂时没有，也可以先创建空壳 JSON，再逐步通过 `mining` 或 `evolution` 生成自己的本地库。
 
 ## 常用命令
 
@@ -297,10 +312,8 @@ PYTHONPATH=src python3 -m unittest tests.test_research_pipeline -v
 - `logs/alpha_factor_mining_loop/<run_id>/llm_raw_io.jsonl`
 - `artifacts/debug_logs/debug_<timestamp>.log`
 - `artifacts/trajectory_pool.json`
-- `logs/evolution_loop/EVO_*/progress.jsonl`
-- `progress.jsonl` now includes run events plus per-generation population snapshots.
-- `logs/evolution_loop/EVO_*/structured.jsonl`
-- `structured.jsonl` now records evaluated/rejected expression candidates, subset candidates, model-parameter candidates, and generation snapshots.
+- `logs/evolution_loop/EVO_*/progress.jsonl`：包含 run 级事件和每一代的 population 快照
+- `logs/evolution_loop/EVO_*/structured.jsonl`：记录表达式候选、子集候选、模型参数候选及 generation 快照
 - `logs/evolution_loop/EVO_*/loop.json`
 - `logs/evolution_loop/EVO_*/population.csv`
 - `logs/evolution_loop/EVO_*/candidate_pool.json`
@@ -311,12 +324,8 @@ PYTHONPATH=src python3 -m unittest tests.test_research_pipeline -v
 - `logs/evolution_loop/EVO_*/model_param_population.csv`
 - `logs/evolution_loop/EVO_*/model_param_summary.json`
 - `logs/evolution_loop/EVO_*/evolution_wiki_summary.json`
-- `factor_library/raw/all_factors_library.json`
-- `factor_library/raw/mutated_factors_library.json`
-- `factor_library/raw/model_params/`
-- `factor_library/raw/factor_codes/`
-- `factor_library/raw/negative_knowledge/`
-- `factor_library/wiki/`
+
+`factor_library/raw/` 也是运行产物的一部分，但它默认按本地工作目录管理，不建议直接纳入公共仓库。
 
 实验时建议使用：
 
@@ -335,14 +344,13 @@ FACTOR_LIBRARY_PATH=/tmp/factor_library_test.json python3 main.py --loop-count 1
 ## 注意事项
 
 - 不要输出 `.env`、`.env.local` 或 raw LLM 日志中的密钥内容。
-- 不要随意删除 `factor_library/raw/all_factors_library.json`、因子代码和历史日志。
+- 不要随意删除你本地 `factor_library/raw/` 里的因子库文件和知识文件。
 - `data/panel_data.parquet` 可能较大，频繁全量读取会拖慢调试。
 - 修改 agent 的共享上下文字段时，同步更新 `src/workflows/context_policies.py`。
-- 修改 prompt 输出契约时，同步更新下游 reader、schema、测试和 `AGENTS.md`。
+- 修改 prompt 输出契约时，同步更新下游 reader、schema 和测试。
 - 主逻辑文件是 `src/agents/backtest_runner_agent.py`。仓库里还有一个历史副本 `src/agents/backtest_runner_agent 2.py`，除非目标是清理副本，否则不要误改它。
 
 ## 相关文档
 
-- `AGENTS.md`: AI coding agent 工作规约
 - `docs/factor_evolved.md`: 因子演化方案
 - `docs/optimization_walkthrough.md`: 优化路线图和系统加固记录
