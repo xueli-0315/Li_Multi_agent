@@ -65,7 +65,27 @@ v1 使用确定性词典规则提取特征，不在 adapter 内调用 LLM。
 
 这些特征会按 panel 的 bar 时间对齐到 `(datetime, symbol)`，再 left join 到 panel。
 
-## 4. CLI 用法
+## 4. 文本特征配置
+
+Data interface 默认读取 `configs/data_interface.yaml`。也可以在 `.env` 中指定其他配置文件：
+
+```env
+DATA_INTERFACE_CONFIG_PATH=configs/data_interface.yaml
+```
+
+配置文件支持：
+
+- `text_feature_columns`: 输出的文本特征列
+- `required_columns`: 输入文本数据的必需字段，默认是 `timestamp` 和 `symbol`
+- `lexicon.positive_words`: 正向情绪词
+- `lexicon.negative_words`: 负向情绪词
+- `lexicon.risk_words`: 风险事件词
+- `lexicon.policy_words`: 政策/监管事件词
+- `lexicon.liquidity_words`: 流动性事件词
+
+如果配置文件缺失或格式错误，代码会回退到内置默认值，并把原因写入 `DataBundle.warnings`。
+
+## 5. CLI 用法
 
 当前原始文本输入只推荐在 `mining` mode 使用：
 
@@ -84,7 +104,7 @@ PYTHONPATH=src python3 main.py --mode mining \
   --text-data-path data/unstructured/sample_crypto_news.jsonl
 ```
 
-## 5. Artifacts
+## 6. Artifacts
 
 当提供 `--text-data-path` 或 `--write-data-artifacts` 时，会写出：
 
@@ -95,7 +115,7 @@ PYTHONPATH=src python3 main.py --mode mining \
 
 `mining` 入口会把 artifacts 写到本次 `logs/alpha_factor_mining_loop/<run_id>/data_bundle/`。
 
-## 6. 和因子表达式的关系
+## 7. 和因子表达式的关系
 
 启用文本数据后，文本特征会进入 `available_features`。因此 `mining` 里的 LLM 可以生成这样的候选表达式：
 
@@ -106,7 +126,7 @@ PYTHONPATH=src python3 main.py --mode mining \
 
 如果不传 `--text-data-path`，默认行为与原项目一致，只使用 crypto panel 的结构化列。
 
-## 7. 和 evolution / batch-backtest 的边界
+## 8. 和 evolution / batch-backtest 的边界
 
 当前建议的项目边界是：
 

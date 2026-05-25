@@ -199,6 +199,118 @@ ZHIPU_MODEL=glm-4-flash
 
 `AGENT_MODEL_MAP` 可以传 JSON 对象，为不同 agent 指定不同模型。
 
+### `.env`、CLI 与配置文件的分工
+
+推荐把 `.env` 用作本机环境和默认入口配置，把 CLI 用作单次实验参数，把较长的词典或字段定义放在 YAML/JSON 配置文件中。
+
+当前已经由代码读取的 `.env` 示例：
+
+```env
+# LLM provider / credentials
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your_api_key
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=openrouter/owl-alpha
+
+# Optional mining defaults
+INITIAL_DIRECTION=山寨币在过热时可能会发生反转，基于这个假设可以发掘盈利因子。
+
+# Optional local factor persistence
+FACTOR_LIBRARY_SUFFIX=my_experiment
+# FACTOR_LIBRARY_PATH=/absolute/path/to/local_factor_library.json
+# FACTOR_CACHE_DIR=/absolute/path/to/cache
+# FACTOR_CODE_DIR=/absolute/path/to/generated_factor_codes
+```
+
+这些参数更适合留在 CLI 中，因为它们描述的是“本次怎么跑”：
+
+```bash
+python3 main.py --mode mining --loop-count 1 \
+  --panel-data-path data/panel_data.parquet \
+  --text-data-path data/unstructured/sample_crypto_news.jsonl
+
+PYTHONPATH=src python3 scripts/run_factor_evolution.py \
+  --evolve-target factor \
+  --factor-ga-mode hybrid \
+  --num-generations 5 \
+  --population-size 5 \
+  --seed 42
+
+python3 main.py --mode batch-backtest \
+  --min-factors 10 \
+  --ic-threshold 0.003 \
+  --icir-threshold 0.02
+```
+
+Data interface 的文本特征列和词典已经支持 YAML 配置。建议不要把长词典直接塞进 `.env`，而是在 `.env` 里只放配置文件路径，例如：
+
+```env
+DATA_INTERFACE_CONFIG_PATH=configs/data_interface.yaml
+```
+
+如果不设置这个变量，默认会读取 `configs/data_interface.yaml`。对应的配置文件长这样：
+
+```yaml
+text_feature_columns:
+  - news_count
+  - news_sentiment_score
+  - risk_event_count
+  - policy_event_flag
+  - liquidity_event_score
+
+required_columns:
+  - timestamp
+  - symbol
+
+lexicon:
+  positive_words:
+    - adoption
+    - bullish
+    - growth
+    - inflow
+    - partnership
+    - positive
+    - rally
+    - surge
+    - upgrade
+  negative_words:
+    - bearish
+    - decline
+    - exploit
+    - hack
+    - lawsuit
+    - liquidation
+    - negative
+    - outflow
+    - risk
+    - selloff
+  risk_words:
+    - hack
+    - exploit
+    - lawsuit
+    - liquidation
+    - risk
+    - security
+    - default
+  policy_words:
+    - ban
+    - etf
+    - policy
+    - regulation
+    - sec
+    - approval
+    - law
+  liquidity_words:
+    - funding
+    - inflow
+    - liquidity
+    - open interest
+    - outflow
+    - volume
+```
+
+当前支持通过 YAML 自定义 `text_feature_columns`、`required_columns` 和 `lexicon`。如果配置文件缺失或格式错误，代码会回退到内置默认值，并在 data bundle 的 warnings 中记录原因。
+
 ## 本地工作目录
 
 下面这些目录更适合作为本地工作区使用，通常不建议直接提交到公共仓库：

@@ -5,7 +5,7 @@ from typing import Any
 
 import pandas as pd
 
-from adapters.data_interface import DataBundle, TEXT_FEATURE_COLUMNS, UnifiedMarketDataAdapter, infer_time_step
+from adapters.data_interface import DataBundle, UnifiedMarketDataAdapter, infer_time_step
 
 
 class CryptoCrossSectionDomainAdapter:
@@ -147,7 +147,7 @@ class CryptoCrossSectionDomainAdapter:
             col for col in summary["feature_columns"]
             if not col.startswith("returns_") and col in STRICT_WHITELIST
         ]
-        for col in TEXT_FEATURE_COLUMNS:
+        for col in bundle.feature_schema.text_feature_columns:
             if col in summary["feature_columns"] and col not in available_features:
                 available_features.append(col)
         time_step: str = summary["time_step"]

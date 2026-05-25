@@ -1,0 +1,56 @@
+text_feature_columns:
+  - news_count
+  - news_sentiment_score
+  - risk_event_count
+  - policy_event_flag
+  - liquidity_event_score
+
+required_columns:
+  - timestamp
+  - symbol
+
+lexicon:
+  positive_words:
+    - adoption
+    - bullish
+    - growth
+    - inflow
+    - partnership
+    - positive
+    - rally
+    - surge
+    - upgrade
+  negative_words:
+    - bearish
+    - decline
+    - exploit
+    - hack
+    - lawsuit
+    - liquidation
+    - negative
+    - outflow
+    - risk
+    - selloff
+  risk_words:
+    - hack
+    - exploit
+    - lawsuit
+    - liquidation
+    - risk
+    - security
+    - default
+  policy_words:
+    - ban
+    - etf
+    - policy
+    - regulation
+    - sec
+    - approval
+    - law
+  liquidity_words:
+    - funding
+    - inflow
+    - liquidity
+    - open interest
+    - outflow
+    - volume

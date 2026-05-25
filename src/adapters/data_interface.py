@@ -1,21 +1,122 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import yaml
 
 
-TEXT_FEATURE_COLUMNS = [
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_INTERFACE_CONFIG_ENV = "DATA_INTERFACE_CONFIG_PATH"
+DEFAULT_DATA_INTERFACE_CONFIG_PATH = PROJECT_ROOT / "configs" / "data_interface.yaml"
+
+DEFAULT_TEXT_FEATURE_COLUMNS = [
     "news_count",
     "news_sentiment_score",
     "risk_event_count",
     "policy_event_flag",
     "liquidity_event_score",
 ]
+TEXT_FEATURE_COLUMNS = list(DEFAULT_TEXT_FEATURE_COLUMNS)
+DEFAULT_REQUIRED_COLUMNS = {"timestamp", "symbol"}
+DEFAULT_POSITIVE_WORDS = {
+    "adoption",
+    "bullish",
+    "growth",
+    "inflow",
+    "partnership",
+    "positive",
+    "rally",
+    "surge",
+    "upgrade",
+}
+DEFAULT_NEGATIVE_WORDS = {
+    "bearish",
+    "decline",
+    "exploit",
+    "hack",
+    "lawsuit",
+    "liquidation",
+    "negative",
+    "outflow",
+    "risk",
+    "selloff",
+}
+DEFAULT_RISK_WORDS = {"hack", "exploit", "lawsuit", "liquidation", "risk", "security", "default"}
+DEFAULT_POLICY_WORDS = {"ban", "etf", "policy", "regulation", "sec", "approval", "law"}
+DEFAULT_LIQUIDITY_WORDS = {"funding", "inflow", "liquidity", "open interest", "outflow", "volume"}
+
+
+@dataclass
+class DataInterfaceSettings:
+    text_feature_columns: list[str] = field(default_factory=lambda: list(DEFAULT_TEXT_FEATURE_COLUMNS))
+    required_columns: set[str] = field(default_factory=lambda: set(DEFAULT_REQUIRED_COLUMNS))
+    positive_words: set[str] = field(default_factory=lambda: set(DEFAULT_POSITIVE_WORDS))
+    negative_words: set[str] = field(default_factory=lambda: set(DEFAULT_NEGATIVE_WORDS))
+    risk_words: set[str] = field(default_factory=lambda: set(DEFAULT_RISK_WORDS))
+    policy_words: set[str] = field(default_factory=lambda: set(DEFAULT_POLICY_WORDS))
+    liquidity_words: set[str] = field(default_factory=lambda: set(DEFAULT_LIQUIDITY_WORDS))
+    warnings: list[str] = field(default_factory=list)
+
+
+def _string_list(value: Any, default: list[str] | set[str]) -> list[str]:
+    if isinstance(value, str):
+        items = [item.strip() for item in value.split(",")]
+    elif isinstance(value, (list, tuple, set)):
+        items = [str(item).strip() for item in value]
+    else:
+        return list(default)
+    cleaned = [item for item in items if item]
+    return cleaned or list(default)
+
+
+def _config_path_from_env() -> Path:
+    configured = os.getenv(DATA_INTERFACE_CONFIG_ENV, "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        return path if path.is_absolute() else PROJECT_ROOT / path
+    return DEFAULT_DATA_INTERFACE_CONFIG_PATH
+
+
+def load_data_interface_settings(config_path: str | Path | None = None) -> DataInterfaceSettings:
+    settings = DataInterfaceSettings()
+    path = Path(config_path).expanduser() if config_path is not None else _config_path_from_env()
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    if not path.exists():
+        if os.getenv(DATA_INTERFACE_CONFIG_ENV, "").strip():
+            settings.warnings.append(f"data_interface_config_missing:{path}")
+        return settings
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        settings.warnings.append(f"data_interface_config_load_failed:{exc}")
+        return settings
+    if not isinstance(raw, dict):
+        settings.warnings.append("data_interface_config_invalid:root_not_mapping")
+        return settings
+
+    settings.text_feature_columns = _string_list(raw.get("text_feature_columns"), DEFAULT_TEXT_FEATURE_COLUMNS)
+    settings.required_columns = set(_string_list(raw.get("required_columns"), DEFAULT_REQUIRED_COLUMNS))
+    lexicon = raw.get("lexicon", {})
+    if not isinstance(lexicon, dict):
+        settings.warnings.append("data_interface_config_invalid:lexicon_not_mapping")
+        lexicon = {}
+    settings.positive_words = set(_string_list(lexicon.get("positive_words"), DEFAULT_POSITIVE_WORDS))
+    settings.negative_words = set(_string_list(lexicon.get("negative_words"), DEFAULT_NEGATIVE_WORDS))
+    settings.risk_words = set(_string_list(lexicon.get("risk_words"), DEFAULT_RISK_WORDS))
+    settings.policy_words = set(_string_list(lexicon.get("policy_words"), DEFAULT_POLICY_WORDS))
+    settings.liquidity_words = set(_string_list(lexicon.get("liquidity_words"), DEFAULT_LIQUIDITY_WORDS))
+    return settings
+
+
+def get_text_feature_columns() -> list[str]:
+    return list(load_data_interface_settings().text_feature_columns)
 
 
 @dataclass
@@ -66,9 +167,10 @@ class PanelDataAdapter(BaseDataAdapter):
 
     def load(self) -> DataBundle:
         panel = self._load_panel()
-        warnings = self._validate_panel(panel)
+        settings = load_data_interface_settings()
+        warnings = self._validate_panel(panel) + list(settings.warnings)
         debug_panel = self._build_debug_panel(panel)
-        text_cols = [col for col in TEXT_FEATURE_COLUMNS if col in panel.columns]
+        text_cols = [col for col in settings.text_feature_columns if col in panel.columns]
         schema = self._build_feature_schema(panel, text_cols, warnings)
         return DataBundle(
             panel=panel,
@@ -157,48 +259,29 @@ class PanelDataAdapter(BaseDataAdapter):
 
 
 class MarketTextAdapter:
-    REQUIRED_COLUMNS = {"timestamp", "symbol"}
-
-    POSITIVE_WORDS = {
-        "adoption",
-        "bullish",
-        "growth",
-        "inflow",
-        "partnership",
-        "positive",
-        "rally",
-        "surge",
-        "upgrade",
-    }
-    NEGATIVE_WORDS = {
-        "bearish",
-        "decline",
-        "exploit",
-        "hack",
-        "lawsuit",
-        "liquidation",
-        "negative",
-        "outflow",
-        "risk",
-        "selloff",
-    }
-    RISK_WORDS = {"hack", "exploit", "lawsuit", "liquidation", "risk", "security", "default"}
-    POLICY_WORDS = {"ban", "etf", "policy", "regulation", "sec", "approval", "law"}
-    LIQUIDITY_WORDS = {"funding", "inflow", "liquidity", "open interest", "outflow", "volume"}
-
     def __init__(
         self,
         text_data_path: str | Path,
         panel_index: pd.MultiIndex,
         time_step: str,
+        *,
+        config_path: str | Path | None = None,
     ) -> None:
         self.text_data_path = Path(text_data_path)
         self.panel_index = panel_index
         self.time_step = time_step
-        self.warnings: list[str] = []
+        self.settings = load_data_interface_settings(config_path)
+        self.text_feature_columns = list(self.settings.text_feature_columns)
+        self.required_columns = set(self.settings.required_columns)
+        self.positive_words = set(self.settings.positive_words)
+        self.negative_words = set(self.settings.negative_words)
+        self.risk_words = set(self.settings.risk_words)
+        self.policy_words = set(self.settings.policy_words)
+        self.liquidity_words = set(self.settings.liquidity_words)
+        self.warnings: list[str] = list(self.settings.warnings)
 
     def load_features(self) -> pd.DataFrame:
-        base = pd.DataFrame(0.0, index=self.panel_index, columns=TEXT_FEATURE_COLUMNS)
+        base = pd.DataFrame(0.0, index=self.panel_index, columns=self.text_feature_columns)
         if not self.text_data_path.exists():
             self.warnings.append(f"text_data_missing:{self.text_data_path}")
             return base
@@ -209,7 +292,7 @@ class MarketTextAdapter:
             self.warnings.append(f"text_data_load_failed:{exc}")
             return base
 
-        missing = sorted(self.REQUIRED_COLUMNS - set(records.columns))
+        missing = sorted(self.required_columns - set(records.columns))
         if missing:
             self.warnings.append(f"text_data_missing_columns:{','.join(missing)}")
             return base
@@ -222,7 +305,7 @@ class MarketTextAdapter:
             self.warnings.append("text_data_no_aligned_events")
             return base
         combined = base.add(events.reindex(base.index).fillna(0.0), fill_value=0.0)
-        return combined[TEXT_FEATURE_COLUMNS]
+        return combined[self.text_feature_columns]
 
     def _read_text_records(self) -> pd.DataFrame:
         suffix = self.text_data_path.suffix.lower()
@@ -245,14 +328,22 @@ class MarketTextAdapter:
         frame["datetime"] = self._align_timestamps(frame["timestamp"])
         frame = frame.dropna(subset=["datetime", "symbol"])
         if frame.empty:
-            return pd.DataFrame(columns=TEXT_FEATURE_COLUMNS)
+            return pd.DataFrame(columns=self.text_feature_columns)
 
-        frame["news_count"] = 1.0
-        frame["news_sentiment_score"] = frame["_text"].map(self._sentiment_score)
-        frame["risk_event_count"] = frame["_text"].map(lambda value: float(self._contains_any(value, self.RISK_WORDS)))
-        frame["policy_event_flag"] = frame["_text"].map(lambda value: float(self._contains_any(value, self.POLICY_WORDS)))
-        frame["liquidity_event_score"] = frame["_text"].map(lambda value: float(self._contains_any(value, self.LIQUIDITY_WORDS)))
-        grouped = frame.groupby(["datetime", "symbol"], sort=True)[TEXT_FEATURE_COLUMNS].sum()
+        supported_features = {
+            "news_count": 1.0,
+            "news_sentiment_score": frame["_text"].map(self._sentiment_score),
+            "risk_event_count": frame["_text"].map(lambda value: float(self._contains_any(value, self.risk_words))),
+            "policy_event_flag": frame["_text"].map(lambda value: float(self._contains_any(value, self.policy_words))),
+            "liquidity_event_score": frame["_text"].map(lambda value: float(self._contains_any(value, self.liquidity_words))),
+        }
+        for column in self.text_feature_columns:
+            if column in supported_features:
+                frame[column] = supported_features[column]
+            else:
+                frame[column] = 0.0
+                self.warnings.append(f"unsupported_text_feature_column:{column}")
+        grouped = frame.groupby(["datetime", "symbol"], sort=True)[self.text_feature_columns].sum()
         grouped.index = grouped.index.set_names(["datetime", "symbol"])
         return grouped.astype(float)
 
@@ -268,8 +359,8 @@ class MarketTextAdapter:
         return pd.Series(aligned, index=timestamps.index)
 
     def _sentiment_score(self, value: str) -> float:
-        positive = sum(1 for word in self.POSITIVE_WORDS if self._has_word(value, word))
-        negative = sum(1 for word in self.NEGATIVE_WORDS if self._has_word(value, word))
+        positive = sum(1 for word in self.positive_words if self._has_word(value, word))
+        negative = sum(1 for word in self.negative_words if self._has_word(value, word))
         if positive == negative == 0:
             return 0.0
         return float((positive - negative) / max(1, positive + negative))
@@ -302,6 +393,7 @@ class UnifiedMarketDataAdapter(BaseDataAdapter):
         self.debug_time_steps = int(debug_time_steps)
 
     def load(self) -> DataBundle:
+        settings = load_data_interface_settings()
         panel_bundle = PanelDataAdapter(
             self.panel_data_path,
             debug_symbol_count=self.debug_symbol_count,
@@ -315,8 +407,8 @@ class UnifiedMarketDataAdapter(BaseDataAdapter):
             text_adapter = MarketTextAdapter(self.text_data_path, panel.index, panel_bundle.feature_schema.time_step)
             text_features = text_adapter.load_features()
             warnings.extend(text_adapter.warnings)
-            if "news_count" in text_features.columns and float(text_features["news_count"].sum()) > 0:
-                text_cols = [col for col in TEXT_FEATURE_COLUMNS if col in text_features.columns]
+            if not text_features.empty and float(text_features.abs().sum().sum()) > 0:
+                text_cols = [col for col in settings.text_feature_columns if col in text_features.columns]
                 panel = panel.join(text_features[text_cols], how="left")
                 panel[text_cols] = panel[text_cols].fillna(0.0)
 

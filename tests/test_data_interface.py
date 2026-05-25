@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -83,6 +84,50 @@ class DataInterfaceTests(unittest.TestCase):
         )
         self.assertGreater(features["news_count"].sum(), 0)
         self.assertGreater(features["news_sentiment_score"].abs().sum(), 0)
+
+    def test_text_adapter_reads_yaml_config_from_env(self) -> None:
+        old_config_path = os.environ.get("DATA_INTERFACE_CONFIG_PATH")
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                panel_path = self._write_panel(root)
+                panel = pd.read_parquet(panel_path)
+                text_path = root / "custom_news.jsonl"
+                text_path.write_text(
+                    '{"timestamp":"2025-01-02T12:00:00Z","symbol":"BTCUSDT","title":"BTC moon","body":"moon signal","url":"https://example.com"}\n',
+                    encoding="utf-8",
+                )
+                config_path = root / "data_interface.yaml"
+                config_path.write_text(
+                    "\n".join(
+                        [
+                            "text_feature_columns:",
+                            "  - news_count",
+                            "  - news_sentiment_score",
+                            "required_columns:",
+                            "  - timestamp",
+                            "  - symbol",
+                            "lexicon:",
+                            "  positive_words:",
+                            "    - moon",
+                            "  negative_words:",
+                            "    - dump",
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                os.environ["DATA_INTERFACE_CONFIG_PATH"] = str(config_path)
+
+                features = MarketTextAdapter(text_path, panel.index, "1d").load_features()
+
+            self.assertEqual(list(features.columns), ["news_count", "news_sentiment_score"])
+            self.assertGreater(features["news_sentiment_score"].sum(), 0)
+        finally:
+            if old_config_path is None:
+                os.environ.pop("DATA_INTERFACE_CONFIG_PATH", None)
+            else:
+                os.environ["DATA_INTERFACE_CONFIG_PATH"] = old_config_path
 
     def test_unified_adapter_merges_text_features_and_writes_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
