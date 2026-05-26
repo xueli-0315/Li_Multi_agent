@@ -436,6 +436,15 @@ PYTHONPATH=src python3 -m unittest tests.test_research_pipeline -v
 - `logs/evolution_loop/EVO_*/model_param_population.csv`
 - `logs/evolution_loop/EVO_*/model_param_summary.json`
 - `logs/evolution_loop/EVO_*/evolution_wiki_summary.json`
+- `results/batch_backtest/BATCH_*/results.json`
+- `results/batch_backtest/BATCH_*/summary.txt`
+- `results/batch_backtest/BATCH_*/predictions.csv`
+- `results/batch_backtest/BATCH_*/feature_importance.csv`
+- `results/batch_backtest/BATCH_*/top50_signals.csv`
+- `results/batch_backtest/BATCH_*/figures/`
+- `logs/batch_backtest/BATCH_*/qlib_data/`
+- `logs/batch_backtest/BATCH_*/qlib_dummy_data/`
+- `logs/batch_backtest/BATCH_*/batch_backtest_BATCH_*.jsonl`
 
 `factor_library/raw/` 也是运行产物的一部分，但它默认按本地工作目录管理，不建议直接纳入公共仓库。
 

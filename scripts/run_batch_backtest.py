@@ -73,8 +73,9 @@ DEFAULT_LGB_PARAMS = {
     "bagging_freq": 1,
 }
 
-# ── Logging ──
+# ── Output / logging ──
 
+DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "results" / "batch_backtest"
 LOG_BASE = PROJECT_ROOT / "logs" / "batch_backtest"
 
 
@@ -217,8 +218,13 @@ def compute_ic_series(signal: pd.Series, target: pd.Series) -> pd.Series | None:
     if frame.empty or frame["signal"].nunique() < 2:
         return None
 
+    def _daily_rank_ic(group: pd.DataFrame) -> float:
+        if len(group) <= 2 or group["signal"].nunique() < 2 or group["target"].nunique() < 2:
+            return np.nan
+        return group["signal"].corr(group["target"], method="spearman")
+
     ic_values = frame.groupby(level="datetime").apply(
-        lambda g: g["signal"].corr(g["target"], method="spearman") if len(g) > 2 else np.nan
+        _daily_rank_ic
     ).dropna()
 
     if len(ic_values) < 5:
@@ -273,8 +279,14 @@ def compute_signal_analysis(
         return {"error": "no overlapping data"}
 
     by_date = df.groupby(level="datetime", group_keys=False)
-    ic = by_date.apply(lambda x: x["score"].corr(x["label"])).rename("ic")
-    rank_ic = by_date.apply(lambda x: x["score"].corr(x["label"], method="spearman")).rename("rank_ic")
+
+    def _daily_corr(day_df: pd.DataFrame, *, method: str = "pearson") -> float:
+        if len(day_df) <= 2 or day_df["score"].nunique() < 2 or day_df["label"].nunique() < 2:
+            return np.nan
+        return day_df["score"].corr(day_df["label"], method=method)
+
+    ic = by_date.apply(lambda x: _daily_corr(x)).rename("ic")
+    rank_ic = by_date.apply(lambda x: _daily_corr(x, method="spearman")).rename("rank_ic")
 
     def _long_short(day_df: pd.DataFrame) -> pd.Series:
         n = max(1, int(len(day_df) * quantile))
@@ -534,7 +546,7 @@ def run_batch_backtest(
     library_paths: list[Path] | None = None,
     panel_data_path: Path = DEFAULT_PANEL_PATH,
     min_factors: int = 10,
-    output_dir: Path = PROJECT_ROOT / "results" / "batch_backtest",
+    output_dir: Path = DEFAULT_OUTPUT_ROOT,
     ic_threshold: float = 0.02,
     icir_threshold: float = 0.5,
     segments: dict[str, list[str]] | None = None,
@@ -554,12 +566,17 @@ def run_batch_backtest(
 
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"BATCH_{run_ts}"
+    run_out = output_dir / run_id
+    run_out.mkdir(parents=True, exist_ok=True)
     log_dir = _setup_logging(run_id, LOG_BASE / run_id)
     logger.info(f"=== Batch Backtest [{run_id}] ===")
 
-    results: dict[str, Any] = {"run_id": run_id, "timestamp": run_ts}
-    run_out = output_dir / run_id
-    run_out.mkdir(parents=True, exist_ok=True)
+    results: dict[str, Any] = {
+        "run_id": run_id,
+        "timestamp": run_ts,
+        "_output_dir": str(run_out),
+        "_log_dir": str(log_dir),
+    }
 
     # 1. Load factors
     if library_paths is None:
@@ -815,8 +832,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Minimum absolute IC mean to include a factor (default: 0.003)")
     parser.add_argument("--icir-threshold", type=float, default=0.02,
                         help="Minimum absolute ICIR to include a factor (default: 0.02)")
-    parser.add_argument("--output-dir", type=str, default=str(PROJECT_ROOT / "results" / "batch_backtest"),
-                        help="Output directory (default: results/batch_backtest)")
+    parser.add_argument("--output-dir", type=str, default=str(DEFAULT_OUTPUT_ROOT),
+                        help="Result output root directory (default: results/batch_backtest)")
     return parser
 
 

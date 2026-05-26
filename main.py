@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import subprocess
@@ -381,10 +382,7 @@ def _chain_loggers(*loggers: Callable[[dict[str, Any]], None] | None) -> Callabl
 def _run_evolution(
     *,
     panel_data_path: str,
-    debug_enabled: bool,
-    log_base: Path,
-    progress_logger: Callable[[dict[str, Any]], None],
-    raw_io_logger: Callable[[dict[str, Any]], None],
+    log_root: Path,
     evolve_target: str = "factor",
     factor_ga_mode: str = "hybrid",
     num_generations: int = 5,
@@ -396,10 +394,11 @@ def _run_evolution(
         sys.path.insert(0, str(PROJECT_ROOT))
     from scripts.run_factor_evolution import EvolutionConfig, run_evolution
 
-    print(f"Running evolution mode, logs: {log_base}")
+    print(f"Running evolution mode, log root: {log_root}")
 
     config = EvolutionConfig()
     config.panel_data_path = Path(panel_data_path)
+    config.log_root = log_root
     config.evolve_target = str(evolve_target)
     config.ga_mode = str(factor_ga_mode)
     config.factor_ga_mode = str(factor_ga_mode)
@@ -408,13 +407,17 @@ def _run_evolution(
     config.seed = int(seed)
     config.final_audit_top_n = 0
 
-    run_evolution(config)
+    result = run_evolution(config)
+    print(f"Evolution status: {result.status}")
+    print(f"Run directory: {result.run_dir}")
+    if result.reason:
+        print(f"Reason: {result.reason}")
 
 
 def _run_batch_backtest(
     *,
     panel_data_path: str,
-    log_base: Path,
+    result_root: Path,
     min_factors: int = 10,
     ic_threshold: float = 0.003,
     icir_threshold: float = 0.02,
@@ -424,20 +427,25 @@ def _run_batch_backtest(
         sys.path.insert(0, str(PROJECT_ROOT))
     from scripts.run_batch_backtest import run_batch_backtest
 
-    print(f"Running batch backtest, logs: {log_base}")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    print(f"Running batch backtest, result root: {result_root}")
 
     result = run_batch_backtest(
         panel_data_path=Path(panel_data_path),
         min_factors=min_factors,
-        output_dir=log_base,
+        output_dir=result_root,
         ic_threshold=ic_threshold,
         icir_threshold=icir_threshold,
     )
     print(f"Batch backtest result: {result['status']}")
+    if result.get("_output_dir"):
+        print(f"Result directory: {result['_output_dir']}")
+    if result.get("_log_dir"):
+        print(f"Log directory: {result['_log_dir']}")
 
     # 自动生成 workflow_output 分析图表
     if result.get("status") == "completed":
-        run_out = Path(result.get("_output_dir", str(log_base)))
+        run_out = Path(result.get("_output_dir", str(result_root)))
         try:
             import importlib.util
             _script_path = PROJECT_ROOT / "scripts" / "generate_workflow_analysis.py"
@@ -493,24 +501,6 @@ def main() -> None:
     _load_dotenv_files()
     parser = build_arg_parser()
     args = parser.parse_args()
-    debug_enabled = bool(args.debug)
-    debug_log_path = _build_debug_log_path(debug_enabled)
-
-    # 创建结构化日志文件（logs/alpha_factor_mining_loop/<run_id>/）
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_base = PROJECT_ROOT / "logs" / "alpha_factor_mining_loop" / run_id
-    log_base.mkdir(parents=True, exist_ok=True)
-
-    # --- Always-on JSONL loggers in the run log directory ---
-    progress_jsonl_logger = _build_jsonl_logger(log_base / "progress.jsonl", "workflow_event")
-    llm_raw_io_jsonl_logger = _build_jsonl_logger(log_base / "llm_raw_io.jsonl", "llm_io")
-
-    # --- Optional verbose debug loggers (stderr + consolidated debug file) ---
-    progress_debug_logger = _build_debug_logger(debug_enabled, "workflow_event", debug_log_path)
-    raw_io_debug_logger = _build_debug_logger(debug_enabled, "llm_io", debug_log_path)
-
-    progress_logger = _chain_loggers(progress_jsonl_logger, progress_debug_logger)
-    raw_io_logger = _chain_loggers(llm_raw_io_jsonl_logger, raw_io_debug_logger)
 
     if args.mode == "evolution":
         if args.text_data_path or args.write_data_artifacts:
@@ -521,10 +511,7 @@ def main() -> None:
             )
         _run_evolution(
             panel_data_path=args.panel_data_path,
-            debug_enabled=debug_enabled,
-            log_base=log_base,
-            progress_logger=progress_logger,
-            raw_io_logger=raw_io_logger,
+            log_root=PROJECT_ROOT / "logs" / "evolution_loop",
             evolve_target=args.evolve_target,
             factor_ga_mode=args.factor_ga_mode,
             num_generations=args.evo_generations,
@@ -542,7 +529,7 @@ def main() -> None:
             )
         _run_batch_backtest(
             panel_data_path=args.panel_data_path,
-            log_base=log_base,
+            result_root=PROJECT_ROOT / "results" / "batch_backtest",
             min_factors=args.min_factors,
             ic_threshold=args.ic_threshold,
             icir_threshold=args.icir_threshold,
@@ -550,6 +537,7 @@ def main() -> None:
         return
 
     # --- mining mode (default): subprocess to run_alpha_factor_mining_loop.py ---
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     script = PROJECT_ROOT / "scripts" / "run_alpha_factor_mining_loop.py"
     cmd = [
         sys.executable, str(script),

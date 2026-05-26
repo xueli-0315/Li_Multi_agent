@@ -58,7 +58,7 @@ python3 scripts/run_batch_backtest.py
 | `--library-paths` | 指定因子库文件 | 不传则使用默认库集合 |
 | `--ic-threshold` | IC 筛选阈值 | 默认 0.003 |
 | `--icir-threshold` | ICIR 筛选阈值 | 默认 0.02 |
-| `--output-dir` | 输出目录 | 默认写入 `results/batch_backtest/` |
+| `--output-dir` | 结果输出根目录 | 默认写入 `results/batch_backtest/` |
 
 ## 3. 这个 mode 的实际流程
 
@@ -124,13 +124,21 @@ python3 scripts/run_batch_backtest.py
 
 ### 4.1 main.py 入口输出
 
-当通过 `main.py --mode batch-backtest` 运行时，结果会写到本轮日志目录下，并在成功时自动生成分析图。
+当通过 `main.py --mode batch-backtest` 运行时，结果会写到：
+
+- `results/batch_backtest/BATCH_<timestamp>/`
+
+过程日志和 qlib 中间缓存会写到：
+
+- `logs/batch_backtest/BATCH_<timestamp>/`
+
+成功时，`main.py` 还会把 workflow analysis 图表写到同一个 run 目录的 `figures/` 下。
 
 ### 4.2 脚本输出目录
 
 `scripts/run_batch_backtest.py` 默认写到：
 
-- `results/batch_backtest/`
+- `results/batch_backtest/BATCH_<timestamp>/`
 
 里面通常会包含：
 
@@ -139,6 +147,21 @@ python3 scripts/run_batch_backtest.py
 - 模型训练结果
 - 图表文件
 - `summary.txt`
+- `results.json`
+- `predictions.csv`
+- `feature_importance.csv`
+- `top50_signals.csv`
+- `figures/`
+
+对应的过程日志目录是：
+
+- `logs/batch_backtest/BATCH_<timestamp>/`
+
+里面通常会包含：
+
+- `qlib_data/`
+- `qlib_dummy_data/`
+- `batch_backtest_BATCH_<timestamp>.jsonl`
 
 ### 4.3 常见结论
 
