@@ -242,7 +242,7 @@ python3 main.py --mode batch-backtest \
   --icir-threshold 0.02
 ```
 
-如果后续要把 data interface 的文本特征列和词典做成可配置项，建议不要直接塞进 `.env`，而是在 `.env` 里只放配置文件路径，例如：
+Data interface 的文本特征列和词典已经支持通过 YAML 配置。建议不要把长词典直接塞进 `.env`，而是在 `.env` 里只放配置文件路径，例如：
 
 ```env
 DATA_INTERFACE_CONFIG_PATH=configs/data_interface.yaml
@@ -309,7 +309,7 @@ lexicon:
     - volume
 ```
 
-注意：`DATA_INTERFACE_CONFIG_PATH` 是推荐的配置形态示例，当前版本还没有读取这个 YAML。现在 data interface 的词典和文本特征列仍在 `src/adapters/data_interface.py` 中定义；要让上述 YAML 生效，需要后续增加配置加载逻辑。
+默认配置文件是 `configs/data_interface.yaml`。如果设置了 `DATA_INTERFACE_CONFIG_PATH`，`src/adapters/data_interface.py` 会读取该 YAML，并用其中的 `text_feature_columns`、`required_columns` 和 `lexicon` 覆盖默认文本特征与词典。
 
 ## 本地工作目录
 
