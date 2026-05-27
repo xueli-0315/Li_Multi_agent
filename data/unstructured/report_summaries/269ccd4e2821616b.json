@@ -1,0 +1,153 @@
+{
+  "document_title": "AI-Driven Sentiment Analysis for Bitcoin Market Trends: A Predictive Approach to Crypto Volatility",
+  "document_date": "2025-04-21",
+  "document_timestamp": "2025-04-21T00:00:00Z",
+  "summary": "Academic study proposing an AI-driven sentiment analysis framework using Twitter, Reddit, and financial news (2019–2024) to predict Bitcoin price volatility; employs VADER and BERT for sentiment labeling and evaluates Logistic Regression, Random Forest, and SVM classifiers, with SVM showing highest accuracy. No trading signals or real-time market events are generated.",
+  "primary_assets": [],
+  "panel_symbols": [
+    "*"
+  ],
+  "events": [
+    {
+      "symbol": "*",
+      "asset_role": "market_benchmark",
+      "title": "Bitcoin volatility driven by supply scarcity, sentiment, liquidity, regulation, and macro events",
+      "body": "Das et al. (2025) identify Bitcoin's 21 million capped supply as a scarcity factor, with market sentiment, liquidity, regulatory actions, and macroeconomic events (interest rate changes, inflation reports) as key volatility drivers.",
+      "event_type": "research_finding",
+      "direction": "neutral",
+      "confidence": 0.85,
+      "evidence": [
+        "Das et al. (2025) found that bitcoin's volatility has several different causes related to its capped supply, market sentiment, liquidity, regulations, and macroeconomic events."
+      ],
+      "timestamp": "2025-04-21T00:00:00Z"
+    },
+    {
+      "symbol": "*",
+      "asset_role": "market_benchmark",
+      "title": "Reddit sentiment correlates with Bitcoin price movements",
+      "body": "Jui et al. (2025) show that Reddit sentiment scores—including crypto-specific terms like 'HODL' and 'FUD'—correspond to changes in Bitcoin price.",
+      "event_type": "research_finding",
+      "direction": "neutral",
+      "confidence": 0.6,
+      "evidence": [
+        "Reddit sentiment scores corresponded to the change in price of Bitcoin."
+      ],
+      "timestamp": "2025-04-21T00:00:00Z"
+    },
+    {
+      "symbol": "*",
+      "asset_role": "market_benchmark",
+      "title": "Negative Bitcoin tweets reveal fear of scams and market manipulation",
+      "body": "Word cloud analysis of negative Bitcoin tweets shows dominant terms like 'scam,' 'pump,' 'dump,' and 'sell,' indicating community distrust and concerns about market manipulation.",
+      "event_type": "sentiment_shift",
+      "direction": "bearish",
+      "confidence": 0.7,
+      "evidence": [
+        "Negative tweets feature terms 'scam,' 'pump,' 'dump,' reflecting distrust in Bitcoin as an investment."
+      ],
+      "timestamp": "2025-04-21T00:00:00Z"
+    },
+    {
+      "symbol": "*",
+      "asset_role": "market_benchmark",
+      "title": "Positive Bitcoin tweets reflect investor optimism and community support",
+      "body": "Positive sentiment tweets highlight recurring terms like 'buy,' 'value,' 'profit,' and 'support,' signaling optimism and community encouragement toward Bitcoin.",
+      "event_type": "sentiment_shift",
+      "direction": "bullish",
+      "confidence": 0.6,
+      "evidence": [
+        "Positive tweets emphasize 'buy,' 'value,' 'profit,' indicating investment optimism."
+      ],
+      "timestamp": "2025-04-21T00:00:00Z"
+    }
+  ],
+  "ignored_mentions": [
+    {
+      "mention": "Bitcoin",
+      "reason": "Primary research subject but BTC is not in the panel symbol universe; treated as non-panel asset."
+    },
+    {
+      "mention": "BTCUSDT",
+      "reason": "Implied asset but not listed in the provided panel symbol universe."
+    },
+    {
+      "mention": "Bloomberg",
+      "reason": "Cited as a news data source, not a tradable asset."
+    },
+    {
+      "mention": "CoinDesk",
+      "reason": "Cited as a news data source, not a tradable asset."
+    },
+    {
+      "mention": "Reuters",
+      "reason": "Cited as a news data source, not a tradable asset."
+    },
+    {
+      "mention": "Twitter",
+      "reason": "Platform used for sentiment data collection, not a financial asset."
+    },
+    {
+      "mention": "Reddit",
+      "reason": "Platform used for sentiment data collection, not a financial asset."
+    },
+    {
+      "mention": "Binance",
+      "reason": "Exchange platform used for market data, not a traded asset in this context."
+    },
+    {
+      "mention": "CoinMarketCap",
+      "reason": "Data provider, not a tradable asset."
+    },
+    {
+      "mention": "TradingView",
+      "reason": "Technical analysis platform, not a tradable asset."
+    },
+    {
+      "mention": "VADER",
+      "reason": "Sentiment analysis tool, not a financial asset."
+    },
+    {
+      "mention": "BERT",
+      "reason": "Machine learning model, not a traded asset."
+    },
+    {
+      "mention": "BVOL",
+      "reason": "CBOE Bitcoin Volatility Index, not a tradable asset in the panel."
+    },
+    {
+      "mention": "DJIA",
+      "reason": "Comparative benchmark from traditional markets, not a crypto panel asset."
+    },
+    {
+      "mention": "GameStop",
+      "reason": "Equity stock mentioned as example, not a crypto panel asset."
+    },
+    {
+      "mention": "AMC",
+      "reason": "Equity stock mentioned as example, not a crypto panel asset."
+    },
+    {
+      "mention": "S&P 500",
+      "reason": "Traditional market index used for comparison, not a crypto panel asset."
+    },
+    {
+      "mention": "r/Bitcoin",
+      "reason": "Subreddit name, not a financial asset."
+    },
+    {
+      "mention": "r/CryptoCurrency",
+      "reason": "Subreddit name, not a financial asset."
+    }
+  ],
+  "evidence": [
+    "Study covers 2019–2024 sentiment data from Twitter, Reddit, Bloomberg, CoinDesk, Reuters.",
+    "Sentiment labeled using VADER and fine-tuned BERT models.",
+    "ML models tested: Logistic Regression, Random Forest, SVM (SVM most accurate).",
+    "Features include sentiment scores, tweet/Reddit volume, news sentiment, BTC price, trading volume, realized volatility, BVOL, moving averages.",
+    "EDA includes word clouds revealing scam fears in negative tweets and buy/value optimism in positive tweets."
+  ],
+  "source_file": "/Users/zhanghengxuelihotmail.com/Desktop/Multi-agent-factor-mining-main/data/unstructured/reports/6729-ArticleText-15682-1-10-202504211.pdf",
+  "extractor_used": "agent",
+  "filtered_events": [],
+  "document_hash": "269ccd4e2821616b"
+}

@@ -4,6 +4,7 @@ __all__ = [
     "FactorCoderAgent",
     "BacktestRunnerAgent",
     "FeedbackSummarizerAgent",
+    "ReportReaderOrganizerAgent",
 ]
 
 
@@ -28,4 +29,8 @@ def __getattr__(name: str):
         from agents.factor_coder_agent import FactorCoderAgent
 
         return FactorCoderAgent
+    if name == "ReportReaderOrganizerAgent":
+        from agents.report_reader_organizer_agent import ReportReaderOrganizerAgent
+
+        return ReportReaderOrganizerAgent
     raise AttributeError(f"module 'trading_agents.agents' has no attribute {name!r}")

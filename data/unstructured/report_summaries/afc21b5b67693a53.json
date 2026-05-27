@@ -1,0 +1,51 @@
+{
+  "document_title": "XRP legal clarity and market structure note",
+  "document_date": "2023-07-20",
+  "document_timestamp": "2023-07-20T00:00:00Z",
+  "summary": "Ripple's July 2023 court ruling is framed as a landmark victory that materially reduces perceived regulatory risk for XRP and may improve exchange access, liquidity, and sentiment around the token.",
+  "primary_assets": [
+    "XRP"
+  ],
+  "panel_symbols": [
+    "XRPUSDT"
+  ],
+  "events": [
+    {
+      "symbol": "XRPUSDT",
+      "asset_role": "primary",
+      "title": "XRP regulatory risk relief after SEC lawsuit ruling",
+      "body": "July 2023 court decision presented as a landmark legal victory for Ripple and the broader crypto industry; the note argues this reduces perceived regulatory risk for XRP, potentially improving exchange listings, liquidity, and market sentiment.",
+      "event_type": "regulatory",
+      "direction": "positive",
+      "confidence": 0.85,
+      "evidence": [
+        "landmark legal victory for Ripple and the entire crypto industry in SEC lawsuit",
+        "reduces part of the perceived regulatory risk and may support exchange access, liquidity, and positive market sentiment for XRP"
+      ],
+      "timestamp": "2023-07-20T00:00:00Z"
+    }
+  ],
+  "ignored_mentions": [
+    {
+      "mention": "SEC",
+      "reason": "regulatory body reference, not a tradable panel asset."
+    },
+    {
+      "mention": "Ripple",
+      "reason": "issuer/company name, not a tradable panel asset."
+    },
+    {
+      "mention": "ETHUSDT",
+      "reason": "not mentioned in the provided context; appears only as a speculative candidate in the chunk layer with no direct support, so it is excluded from document-level events."
+    }
+  ],
+  "evidence": [
+    "July 2023 court decision described as a landmark legal victory for Ripple",
+    "Ruling expected to reduce perceived regulatory risk for XRP",
+    "Legal clarity may support XRP exchange access, liquidity, and market sentiment"
+  ],
+  "source_file": "/Users/zhanghengxuelihotmail.com/Desktop/Multi-agent-factor-mining-main/data/unstructured/reports/2023-07-20_ripple_xrp_legal_clarity_note.md",
+  "extractor_used": "agent",
+  "filtered_events": [],
+  "document_hash": "afc21b5b67693a53"
+}

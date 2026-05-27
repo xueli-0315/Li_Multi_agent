@@ -466,6 +466,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--panel-data-path", default=str(PROJECT_ROOT / "data" / "panel_data.parquet"))
     parser.add_argument("--text-data-path", default="",
                         help="Mining mode only: optional local JSONL/CSV market text data.")
+    parser.add_argument("--market-type", choices=["crypto", "stock", "futures"], default="crypto")
+    parser.add_argument("--domain-config", default="", 
+                        help="Mining mode only: optional domain adapter YAML config.")
+    parser.add_argument("--symbol-alias-path", default="", 
+                        help="Mining mode only: optional symbol alias YAML/JSON path.")
     parser.add_argument("--debug-symbol-count", type=int, default=20,
                         help="Mining mode only: maximum symbols in generated debug panel.")
     parser.add_argument("--debug-time-steps", type=int, default=180,
@@ -473,8 +478,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--write-data-artifacts", action="store_true", default=False,
                         help="Mining mode only: write data_bundle artifacts even without text data.")
     parser.add_argument("--loop-count", type=int, default=1)
-    parser.add_argument("--initial-direction", default="", help="Optional initial hypothesis direction.")
-    parser.add_argument("--initial-hypothesis", default="", help="Optional seed hypothesis injected into first loop.")
+    parser.add_argument("--initial-direction", default="", 
+                        help="Optional initial hypothesis direction.")
+    parser.add_argument("--initial-hypothesis", default="", 
+                        help="Optional seed hypothesis injected into first loop.")
     parser.add_argument("--stop-on-error", action="store_true", default=False)
     parser.add_argument("--retry-per-round", type=int, default=0)
     parser.add_argument("--debug", action="store_true", default=False)
@@ -543,6 +550,7 @@ def main() -> None:
         sys.executable, str(script),
         "--run-id", run_id,
         "--panel-data-path", args.panel_data_path,
+        "--market-type", args.market_type,
         "--loop-count", str(args.loop_count),
         "--initial-direction", args.initial_direction,
         "--initial-hypothesis", args.initial_hypothesis,
@@ -552,6 +560,10 @@ def main() -> None:
         cmd.append("--stop-on-error")
     if args.text_data_path:
         cmd.extend(["--text-data-path", args.text_data_path])
+    if args.domain_config:
+        cmd.extend(["--domain-config", args.domain_config])
+    if args.symbol_alias_path:
+        cmd.extend(["--symbol-alias-path", args.symbol_alias_path])
     if args.write_data_artifacts:
         cmd.append("--write-data-artifacts")
     cmd.extend(["--debug-symbol-count", str(args.debug_symbol_count)])
