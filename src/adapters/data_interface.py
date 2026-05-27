@@ -320,13 +320,16 @@ class MarketTextAdapter:
     def _events_to_features(self, records: pd.DataFrame) -> pd.DataFrame:
         frame = records.copy()
         frame["timestamp"] = pd.to_datetime(frame["timestamp"], errors="coerce", utc=True).dt.tz_convert(None)
-        frame["symbol"] = frame["symbol"].astype(str)
+        frame["symbol"] = frame["symbol"].astype(str).str.upper()
         title = frame["title"] if "title" in frame.columns else pd.Series("", index=frame.index)
         body = frame["body"] if "body" in frame.columns else pd.Series("", index=frame.index)
         text = title.fillna("").astype(str) + " " + body.fillna("").astype(str)
         frame["_text"] = text.str.lower()
         frame["datetime"] = self._align_timestamps(frame["timestamp"])
         frame = frame.dropna(subset=["datetime", "symbol"])
+        if frame.empty:
+            return pd.DataFrame(columns=self.text_feature_columns)
+        frame = self._expand_and_filter_symbols(frame)
         if frame.empty:
             return pd.DataFrame(columns=self.text_feature_columns)
 
@@ -346,6 +349,26 @@ class MarketTextAdapter:
         grouped = frame.groupby(["datetime", "symbol"], sort=True)[self.text_feature_columns].sum()
         grouped.index = grouped.index.set_names(["datetime", "symbol"])
         return grouped.astype(float)
+
+    def _expand_and_filter_symbols(self, frame: pd.DataFrame) -> pd.DataFrame:
+        panel_symbols = sorted({str(value).upper() for value in self.panel_index.get_level_values("symbol").unique()})
+        if not panel_symbols:
+            return frame.iloc[0:0].copy()
+        valid_symbols = set(panel_symbols)
+        unknown_symbols = sorted(set(frame["symbol"]) - valid_symbols - {"*"})
+        if unknown_symbols:
+            self.warnings.append(f"text_data_unknown_symbols:{','.join(unknown_symbols)}")
+        exact = frame[frame["symbol"].isin(valid_symbols)].copy()
+        market_wide = frame[frame["symbol"] == "*"].copy()
+        if market_wide.empty:
+            return exact
+        expanded_parts = []
+        for symbol in panel_symbols:
+            part = market_wide.copy()
+            part["symbol"] = symbol
+            expanded_parts.append(part)
+        expanded = pd.concat(expanded_parts, ignore_index=True) if expanded_parts else market_wide.iloc[0:0].copy()
+        return pd.concat([exact, expanded], ignore_index=True)
 
     def _align_timestamps(self, timestamps: pd.Series) -> pd.Series:
         datetimes = pd.DatetimeIndex(self.panel_index.get_level_values("datetime").unique()).sort_values()

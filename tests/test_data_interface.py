@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from adapters import (
+    CrossSectionDomainAdapter,
     CryptoCrossSectionDomainAdapter,
     MarketTextAdapter,
     PanelDataAdapter,
@@ -52,6 +53,55 @@ class DataInterfaceTests(unittest.TestCase):
         )
         return path
 
+    def _write_stock_panel(self, root: Path) -> Path:
+        index = pd.MultiIndex.from_product(
+            [
+                pd.date_range("2025-01-01", periods=3, freq="1D"),
+                ["600519.SH", "000001.SZ"],
+            ],
+            names=["datetime", "symbol"],
+        )
+        panel = pd.DataFrame(
+            {
+                "open": range(len(index)),
+                "close": range(10, 10 + len(index)),
+                "volume": [100.0] * len(index),
+                "amount": [1000.0] * len(index),
+                "turnover": [0.1] * len(index),
+                "market_cap": [100000.0] * len(index),
+                "returns_1d": [0.001, -0.002] * 3,
+            },
+            index=index,
+        )
+        path = root / "stock_panel.parquet"
+        panel.to_parquet(path)
+        return path
+
+    def _write_futures_panel(self, root: Path) -> Path:
+        index = pd.MultiIndex.from_product(
+            [
+                pd.date_range("2025-01-01", periods=3, freq="1D"),
+                ["CU9999", "AU9999"],
+            ],
+            names=["datetime", "symbol"],
+        )
+        panel = pd.DataFrame(
+            {
+                "open": range(len(index)),
+                "close": range(10, 10 + len(index)),
+                "volume": [100.0] * len(index),
+                "open_interest": [200.0] * len(index),
+                "basis": [0.01] * len(index),
+                "term_structure": [0.02] * len(index),
+                "roll_yield": [0.03] * len(index),
+                "returns_1d": [0.001, -0.002] * 3,
+            },
+            index=index,
+        )
+        path = root / "futures_panel.parquet"
+        panel.to_parquet(path)
+        return path
+
     def test_panel_adapter_builds_schema_and_debug_panel(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             panel_path = self._write_panel(Path(tmp))
@@ -84,6 +134,43 @@ class DataInterfaceTests(unittest.TestCase):
         )
         self.assertGreater(features["news_count"].sum(), 0)
         self.assertGreater(features["news_sentiment_score"].abs().sum(), 0)
+
+    def test_text_adapter_broadcasts_market_wide_events(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            panel_path = self._write_panel(root)
+            panel = pd.read_parquet(panel_path)
+            text_path = root / "market_report.jsonl"
+            text_path.write_text(
+                '{"timestamp":"2025-01-02T12:00:00Z","symbol":"*","source":"report_ingestion","title":"ETF approval improves market liquidity","body":"ETF approval and inflow growth support positive liquidity across crypto.","url":"file:///tmp/report.md"}\n',
+                encoding="utf-8",
+            )
+
+            adapter = MarketTextAdapter(text_path, panel.index, "1d")
+            features = adapter.load_features()
+
+        aligned = pd.Timestamp("2025-01-02")
+        rows = features.loc[(aligned, slice(None)), :]
+        self.assertEqual(float(rows["news_count"].sum()), 3.0)
+        self.assertEqual(set(rows.index.get_level_values("symbol")), {"BTCUSDT", "ETHUSDT", "SOLUSDT"})
+        self.assertGreater(float(rows["news_sentiment_score"].sum()), 0.0)
+
+    def test_text_adapter_skips_unknown_symbols_with_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            panel_path = self._write_panel(root)
+            panel = pd.read_parquet(panel_path)
+            text_path = root / "unknown_symbol.jsonl"
+            text_path.write_text(
+                '{"timestamp":"2025-01-02T12:00:00Z","symbol":"DOGEUSDT","source":"report_ingestion","title":"DOGE bullish report","body":"positive inflow","url":"file:///tmp/report.md"}\n',
+                encoding="utf-8",
+            )
+
+            adapter = MarketTextAdapter(text_path, panel.index, "1d")
+            features = adapter.load_features()
+
+        self.assertEqual(float(features.abs().sum().sum()), 0.0)
+        self.assertTrue(any("text_data_unknown_symbols:DOGEUSDT" in item for item in adapter.warnings))
 
     def test_text_adapter_reads_yaml_config_from_env(self) -> None:
         old_config_path = os.environ.get("DATA_INTERFACE_CONFIG_PATH")
@@ -177,6 +264,29 @@ class DataInterfaceTests(unittest.TestCase):
         self.assertIn("feature_schema", payload)
         self.assertIn("data_artifacts", payload)
         self.assertIn("news_sentiment_score", payload["available_features"])
+
+    def test_cross_section_adapter_supports_stock_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            panel_path = self._write_stock_panel(root)
+            payload = CrossSectionDomainAdapter(panel_path, market_type="stock").build_initial_payload()
+
+        self.assertEqual(payload["market_type"], "stock")
+        self.assertEqual(payload["market"], "stock_cross_section")
+        self.assertEqual(payload["target_column"], "returns_1d")
+        self.assertIn("amount", payload["available_features"])
+        self.assertIn("turnover", payload["available_features"])
+
+    def test_cross_section_adapter_supports_futures_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            panel_path = self._write_futures_panel(root)
+            payload = CrossSectionDomainAdapter(panel_path, market_type="futures").build_initial_payload()
+
+        self.assertEqual(payload["market_type"], "futures")
+        self.assertEqual(payload["market"], "futures_cross_section")
+        self.assertIn("open_interest", payload["available_features"])
+        self.assertIn("basis", payload["available_features"])
 
 
 if __name__ == "__main__":

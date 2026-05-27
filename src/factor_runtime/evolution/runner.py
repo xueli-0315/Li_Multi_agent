@@ -12,6 +12,7 @@ import pandas as pd
 from factor_runtime.evolution.expression_ga import ExpressionGA
 from factor_runtime.evolution.factor_subset_ga import FactorSubsetGA
 from factor_runtime.evolution.model_param_ga import ModelParamGA
+from factor_runtime.evolution.memory import EvolutionMemorySnapshot, load_evolution_memory_snapshot, score_seed_for_memory
 from factor_runtime.evolution.models import (
     EvolutionConfig,
     EvolutionResult,
@@ -66,22 +67,60 @@ class EvolutionRunner:
             },
         )
         self._warn_if_mining_only_text_flags(config, progress_log, run_id, logger)
+        memory_snapshot = load_evolution_memory_snapshot(config)
+        self._write_json(run_dir / "memory_context.json", memory_snapshot.as_payload())
+        self._append_progress_event(
+            progress_log,
+            run_id,
+            "memory_context_loaded",
+            agent_name="evolution_memory",
+            payload={
+                "success_factor_memory_path": memory_snapshot.source_paths.get("success_factor_memory", ""),
+                "evolution_success_factor_memory_path": memory_snapshot.source_paths.get("evolution_success_factor_memory", ""),
+                "evolution_failure_memory_path": memory_snapshot.source_paths.get("evolution_failure_memory", ""),
+                "evolution_distilled_knowledge_path": memory_snapshot.source_paths.get("evolution_distilled_knowledge", ""),
+                "priority_seed_name_count": len(memory_snapshot.priority_seed_names),
+                "penalty_seed_name_count": len(memory_snapshot.penalty_seed_names),
+            },
+        )
+        logger.info(
+            "Evolution memory context loaded",
+            category="evolution",
+            payload={
+                "priority_seed_name_count": len(memory_snapshot.priority_seed_names),
+                "penalty_seed_name_count": len(memory_snapshot.penalty_seed_names),
+            },
+        )
         try:
             panel = self._load_panel(config.panel_data_path)
         except Exception as exc:
             reason = f"panel_load_failed:{exc}"
-            self._write_loop_summary(run_dir, run_id, config, status="failed", reason=reason)
+            self._write_loop_summary(
+                run_dir,
+                run_id,
+                config,
+                status="failed",
+                reason=reason,
+                memory_summary=memory_snapshot.as_payload(),
+            )
             logger.error("Evolution run failed while loading panel", category="evolution", payload={"reason": reason})
             return EvolutionResult(status="failed", run_id=run_id, run_dir=run_dir, reason=reason)
 
         seeds = self._load_seed_factors(config.seed_library_path)
         if not seeds:
             reason = "empty_seed_library"
-            self._write_loop_summary(run_dir, run_id, config, status="failed", reason=reason)
+            self._write_loop_summary(
+                run_dir,
+                run_id,
+                config,
+                status="failed",
+                reason=reason,
+                memory_summary=memory_snapshot.as_payload(),
+            )
             logger.error("Evolution run failed because seed library is empty", category="evolution", payload={"reason": reason})
             return EvolutionResult(status="failed", run_id=run_id, run_dir=run_dir, reason=reason)
         total_seed_count = len(seeds)
-        seeds = self._select_seed_population(seeds, config)
+        seeds = self._select_seed_population(seeds, config, memory_snapshot=memory_snapshot)
         self._append_progress_event(
             progress_log,
             run_id,
@@ -133,6 +172,7 @@ class EvolutionRunner:
                 candidate_count=len(candidates),
                 candidates=candidates,
                 history=history,
+                memory_summary=memory_snapshot.as_payload(),
             )
             self._append_progress_event(
                 progress_log,
@@ -184,6 +224,7 @@ class EvolutionRunner:
                     status="failed",
                     reason=expression_result.reason,
                     expression_result=expression_result,
+                    memory_summary=memory_snapshot.as_payload(),
                 )
                 self._append_history(progress_log, run_id, expression_result.history)
                 self._append_structured_history(logger, expression_result.history)
@@ -321,6 +362,7 @@ class EvolutionRunner:
             history=history,
             accepted_factor_count=len(accepted_factors),
             wiki_summary=wiki_summary,
+            memory_summary=memory_snapshot.as_payload(),
         )
         self._append_progress_event(
             progress_log,
@@ -430,12 +472,24 @@ class EvolutionRunner:
             seeds.append(FactorGenome(name=name, expression=expression, source=str(item.get("source", "library"))))
         return seeds
 
-    def _select_seed_population(self, seeds: list[FactorGenome], config: EvolutionConfig) -> list[FactorGenome]:
+    def _select_seed_population(
+        self,
+        seeds: list[FactorGenome],
+        config: EvolutionConfig,
+        memory_snapshot: EvolutionMemorySnapshot | None = None,
+    ) -> list[FactorGenome]:
+        ranked_seeds = list(seeds)
+        if memory_snapshot is not None and ranked_seeds:
+            ranked_seeds = sorted(
+                ranked_seeds,
+                key=lambda item: score_seed_for_memory(item, memory_snapshot),
+                reverse=True,
+            )
         if config.ga_mode == "subset":
             limit = config.candidate_pool_size
         else:
             limit = max(config.population_size, config.elite_size + config.tournament_k)
-        return seeds[: min(len(seeds), max(1, int(limit)))]
+        return ranked_seeds[: min(len(ranked_seeds), max(1, int(limit)))]
 
     def _candidate_pool(self, factors: list[FactorGenome], config: EvolutionConfig) -> list[FactorGenome]:
         sorted_factors = sorted(factors, key=lambda item: item.fitness, reverse=True)
@@ -716,6 +770,7 @@ class EvolutionRunner:
         history: list[dict[str, Any]] | None = None,
         accepted_factor_count: int = 0,
         wiki_summary: dict[str, Any] | None = None,
+        memory_summary: dict[str, Any] | None = None,
         final_audited_count: int = 0,
         failed_audit_count: int = 0,
     ) -> None:
@@ -740,6 +795,7 @@ class EvolutionRunner:
             "best_subset": subset_result.best.to_dict() if subset_result and subset_result.best else None,
             "best_model_params": model_param_result.best.to_dict() if model_param_result and model_param_result.best else None,
             "wiki_summary": self._json_safe(wiki_summary or {}),
+            "memory_summary": self._json_safe(memory_summary or {}),
             "config": {
                 "evolve_target": config.evolve_target,
                 "ga_mode": config.ga_mode,

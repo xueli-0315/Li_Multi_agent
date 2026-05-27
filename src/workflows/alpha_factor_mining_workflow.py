@@ -11,7 +11,7 @@ from agents import (
     HypothesisAgentV2,
 )
 from core import ModelClient
-from adapters import CryptoCrossSectionDomainAdapter
+from adapters import CrossSectionDomainAdapter, CryptoCrossSectionDomainAdapter
 from factor_runtime.factor_library_manager import FactorLibraryManager
 from factor_runtime.factor_quality_gate import FactorQualityGate, QualityGateConfig
 from infra.structured_logger import StructuredLogger
@@ -227,6 +227,42 @@ class AlphaFactorMiningWorkflow(AgentLoopWorkflow):
         initial_direction: str | None = None,
     ) -> list[LoopTrace]:
         adapter = CryptoCrossSectionDomainAdapter(panel_data_path)
+        payload = adapter.build_initial_payload()
+        if initial_shared_payload:
+            payload.update(initial_shared_payload)
+        return self.run_loops(
+            loop_count=loop_count,
+            initial_shared_payload=payload,
+            initial_direction=initial_direction,
+        )
+
+    def run_with_panel(
+        self,
+        panel_data_path: str | Path,
+        *,
+        market_type: str = "crypto",
+        text_data_path: str | Path | None = None,
+        artifact_dir: str | Path | None = None,
+        write_artifacts: bool = False,
+        debug_symbol_count: int = 20,
+        debug_time_steps: int = 180,
+        domain_config_path: str | Path | None = None,
+        symbol_alias_path: str | Path | None = None,
+        loop_count: int = 5,
+        initial_shared_payload: dict[str, object] | None = None,
+        initial_direction: str | None = None,
+    ) -> list[LoopTrace]:
+        adapter = CrossSectionDomainAdapter(
+            panel_data_path,
+            market_type=market_type,
+            text_data_path=text_data_path,
+            artifact_dir=artifact_dir,
+            write_artifacts=write_artifacts,
+            debug_symbol_count=debug_symbol_count,
+            debug_time_steps=debug_time_steps,
+            domain_config_path=domain_config_path,
+            symbol_alias_path=symbol_alias_path,
+        )
         payload = adapter.build_initial_payload()
         if initial_shared_payload:
             payload.update(initial_shared_payload)

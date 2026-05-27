@@ -1,24 +1,24 @@
-# Batch-Backtest Mode：集中回测与模型训练流程说明
+# Batch-Backtest Mode：集中回测与模型验证
 
-本文件说明 `main.py --mode batch-backtest` 与 `scripts/run_batch_backtest.py` 的行为。  
-这一路径负责把已经沉淀下来的因子库拿来做集中筛选、模型训练和组合回测。
+`batch-backtest` 是项目的最终验证模式。它把已经沉淀下来的因子库拿来做集中筛选、模型训练和组合回测。
 
-## 1. 这个 mode 是做什么的
+---
 
-`batch-backtest` mode 的定位是“最终验证”：
+## 1. 目标
 
-1. 收集所有可用因子库
-2. 先做快速 IC 筛选
-3. 再训练模型
-4. 最后跑组合回测
-5. 输出结果和分析图表
+这个 mode 的目标是：
 
-它和 `evolution` 的区别很明确：
+- 验证一批因子能不能一起工作
+- 验证模型在结构化因子集上的整体表现
+- 输出可查看、可归档的回测结果
 
-- `evolution` 负责把因子变好
-- `batch-backtest` 负责验证这些因子整体能不能形成可用的模型和组合
+一句话理解：
 
-## 2. 入口与 CLI
+> `batch-backtest = 因子库 -> 模型训练 -> 组合回测 -> 最终报告`
+
+---
+
+## 2. 入口与全部 CLI
 
 ### 2.1 主入口
 
@@ -32,82 +32,107 @@ python3 main.py --mode batch-backtest
 python3 scripts/run_batch_backtest.py
 ```
 
-### 2.3 main.py 常用参数
+### 2.3 重点参数
 
-| 参数 | 作用 | 说明 |
-| --- | --- | --- |
-| `--min-factors` | 最少因子数 | 少于这个数量就跳过回测 |
-| `--ic-threshold` | IC 门槛 | 因子进入模型前的基础筛选阈值 |
-| `--icir-threshold` | ICIR 门槛 | 因子进入模型前的稳定性阈值 |
-| `--panel-data-path` | panel 数据路径 | 默认是 `data/panel_data.parquet` |
-| `--text-data-path` | 兼容旧命令 | 现在是 mining-only 输入，batch-backtest 会忽略 |
-| `--debug-symbol-count` | 兼容旧命令 | mining-only 参数，batch-backtest 会忽略 |
-| `--debug-time-steps` | 兼容旧命令 | mining-only 参数，batch-backtest 会忽略 |
-| `--write-data-artifacts` | 兼容旧命令 | mining-only 参数，batch-backtest 会忽略 |
+- `--min-factors`：最少因子数
+- `--ic-threshold`：IC 筛选阈值
+- `--icir-threshold`：ICIR 筛选阈值
+- `--panel-data-path` / `--panel-data`：panel 数据路径
+- `--library-paths`：指定因子库文件
+- `--output-dir`：结果输出根目录
 
-### 2.4 scripts/run_batch_backtest.py 常用参数
+### 2.4 会被忽略的参数
 
-| 参数 | 作用 | 说明 |
-| --- | --- | --- |
-| `--min-factors` | 最少因子数 | 少于这个数量则直接跳过 |
-| `--panel-data` | panel 数据路径 | 与 main.py 对应 |
-| `--text-data-path` | 兼容旧命令 | 现在会被忽略 |
-| `--debug-symbol-count` | 兼容旧命令 | 现在会被忽略 |
-| `--debug-time-steps` | 兼容旧命令 | 现在会被忽略 |
-| `--write-data-artifacts` | 兼容旧命令 | 现在会被忽略 |
-| `--library-paths` | 指定因子库文件 | 不传则使用默认库集合 |
-| `--ic-threshold` | IC 筛选阈值 | 默认 0.003 |
-| `--icir-threshold` | ICIR 筛选阈值 | 默认 0.02 |
-| `--output-dir` | 结果输出根目录 | 默认写入 `results/batch_backtest/` |
+下面这些是 mining-only 兼容参数，在 batch-backtest 中会被忽略：
 
-## 3. 这个 mode 的实际流程
+- `--text-data-path`
+- `--debug-symbol-count`
+- `--debug-time-steps`
+- `--write-data-artifacts`
 
-原始非结构化文本不再直接进入 `batch-backtest`。如果你传入 `--text-data-path`，脚本会提示这是 mining-only 参数并忽略。`batch-backtest` 只读取结构化 panel 与本地因子库。
+---
 
-### 3.1 读取因子库
+## 3. 输入是什么
 
-脚本会按默认顺序读取这些库：
+`batch-backtest` 的输入是“已经整理好的结构化资产”，不是原始文本。
 
+### 3.1 主输入
+
+- `data/panel_data.parquet`
 - `factor_library/raw/all_factors_library.json`
 - `factor_library/raw/mutated_factors_library.json`
 - `factor_library/raw/mutated_factor_library_old.json`
 
-如果传了 `--library-paths`，则只读指定文件。
+### 3.2 可选输入
 
-### 3.2 去重
+- `--library-paths`：只跑指定因子库
+- `--min-factors`：控制至少要有多少因子才跑
+- `--ic-threshold` / `--icir-threshold`：控制进入模型前的筛选强度
 
-读取后会按表达式去重，避免同一公式在多个库里重复进入训练集。
+### 3.3 不会直接吃什么
 
-### 3.3 因子表达式计算
+- 原始 PDF / DOCX / HTML / TXT / MD
+- 原始市场新闻
+- 原始文本 JSONL
 
-每个因子表达式会在 panel 上计算成 signal。  
-如果表达式无法执行，会被丢弃。
+这些文本如果要进入 batch-backtest，必须先通过 `mining` 或 data interface 变成结构化 panel 或已沉淀文本特征。
 
-### 3.4 IC 筛选
+---
 
-脚本会先计算每个因子的 cross-sectional IC 序列，再按阈值筛掉弱因子。
+## 4. 目标流程
 
-常见筛选条件：
+```mermaid
+flowchart LR
+  A["输入：panel + 因子库"] --> B["读取与去重"]
+  B --> C["IC / ICIR 预筛选"]
+  C --> D["构建训练特征矩阵"]
+  D --> E["LightGBM / Qlib 风格训练"]
+  E --> F["组合回测"]
+  F --> G["输出最终结果"]
+```
+
+### 它具体做什么
+
+- 读取所有可用因子库
+- 去重后做基础筛选
+- 把通过筛选的因子整理成训练矩阵
+- 训练模型并检查验证集 / 测试集表现
+- 跑组合回测，生成最终结果
+
+---
+
+## 5. 结果怎么产出
+
+### 5.1 进入模型前怎么筛
+
+脚本先做两层快速筛选：
 
 - `|IC mean| >= ic_threshold`
 - `|ICIR| >= icir_threshold`
 
-如果留下来的因子少于 `--min-factors`，就不进入后续模型和回测。
+如果筛完后因子数少于 `--min-factors`，就会跳过后续模型和回测。
 
-### 3.5 构建训练输入
+### 5.2 模型输入怎么构建
 
-通过筛选的因子会被整理成模型输入矩阵。  
-这一步的目标是把“单因子列表”变成“可训练的特征集”。
+通过筛选的因子会被整理成模型输入矩阵。
 
-### 3.6 模型训练
+它的本质是把：
 
-脚本当前以 LightGBM 路径为主，结合 Qlib 风格训练和配置：
+- “单因子列表”
 
-- 使用因子矩阵训练模型
-- 在 train / valid / test 分段上检查表现
-- 产出模型重要性和中间指标
+变成：
 
-### 3.7 组合回测
+- “可训练的特征集”
+
+### 5.3 模型训练怎么做
+
+当前以 LightGBM / Qlib 风格流程为主：
+
+- 训练模型
+- 看 train / valid / test
+- 导出模型重要性和中间指标
+
+### 5.4 组合回测怎么做
 
 模型训练完成后，会把信号送进组合回测流程，检查：
 
@@ -116,70 +141,67 @@ python3 scripts/run_batch_backtest.py
 - 组合稳定性
 - 关键分段上的一致性
 
-### 3.8 结果分析
+---
 
-如果回测成功，`main.py` 还会尝试自动生成 workflow analysis 图表。
+## 6. 输出和日志
 
-## 4. 输出与产物
-
-### 4.1 main.py 入口输出
+### 6.1 最终结果
 
 当通过 `main.py --mode batch-backtest` 运行时，结果会写到：
 
 - `results/batch_backtest/BATCH_<timestamp>/`
 
-过程日志和 qlib 中间缓存会写到：
+里面通常会有：
 
-- `logs/batch_backtest/BATCH_<timestamp>/`
-
-成功时，`main.py` 还会把 workflow analysis 图表写到同一个 run 目录的 `figures/` 下。
-
-### 4.2 脚本输出目录
-
-`scripts/run_batch_backtest.py` 默认写到：
-
-- `results/batch_backtest/BATCH_<timestamp>/`
-
-里面通常会包含：
-
-- 回测汇总
-- 因子筛选摘要
-- 模型训练结果
-- 图表文件
-- `summary.txt`
 - `results.json`
+- `summary.txt`
 - `predictions.csv`
 - `feature_importance.csv`
 - `top50_signals.csv`
 - `figures/`
 
-对应的过程日志目录是：
+### 6.2 过程日志
+
+过程日志和 qlib 中间缓存会写到：
 
 - `logs/batch_backtest/BATCH_<timestamp>/`
 
-里面通常会包含：
+里面通常会有：
 
+- `batch_backtest_BATCH_<timestamp>.jsonl`
 - `qlib_data/`
 - `qlib_dummy_data/`
-- `batch_backtest_BATCH_<timestamp>.jsonl`
 
-### 4.3 常见结论
+### 6.3 你该先看什么
 
-结果可能会是：
+1. `summary.txt`：一眼看整体结果
+2. `results.json`：结构化结果
+3. `feature_importance.csv`：模型到底在看什么
+4. `figures/`：组合和收益图
+5. `batch_backtest_BATCH_<timestamp>.jsonl`：过程日志
 
-- `completed`：因子数量足够，模型和回测都跑完了
-- `skipped`：因子不足或筛选后没有足够有效因子
-- `failed`：中间训练或数据处理出错
+---
 
-## 5. 这个 mode 的适用场景
+## 7. 适用场景
 
 适合：
 
-- 你已经有一批稳定因子，想看整体模型效果
-- 你想做最终回测和报告输出
-- 你想验证因子库是否真的能支撑模型训练
+- 你已经有一批稳定因子
+- 你想看这些因子能不能形成可用的模型
+- 你要做最终验证和汇报
 
 不适合：
 
-- 你还在做大量表达式发掘
-- 你还想调整 GA 搜索过程
+- 你还在探索大量新表达式
+- 你还想让 LLM 参与研究对话
+- 你还在频繁改因子定义
+
+---
+
+## 8. 和其他 mode 的边界
+
+- `mining`：负责研究闭环
+- `evolution`：负责因子 / 参数优化
+- `batch-backtest`：负责最终验证
+- 原始文本：不直接进入 batch-backtest
+

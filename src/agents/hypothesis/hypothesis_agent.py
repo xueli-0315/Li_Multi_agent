@@ -76,6 +76,11 @@ class HypothesisAgentV2(BaseAgent):
         initial_hypothesis: str,
         rag_text: str,
         distilled_knowledge: str,
+        evolution_distilled_knowledge: str,
+        success_factor_memory: str,
+        evolution_success_factor_memory: str,
+        evolution_failure_memory: str,
+        long_term_memory: str,
         history: list[dict[str, object]],
         history_limit: int,
         rejected_factors: list[dict[str, Any]],
@@ -108,6 +113,11 @@ class HypothesisAgentV2(BaseAgent):
             "hypothesis_and_feedback": hypothesis_and_feedback,
             "RAG": rag_text if rag_text else "",
             "distilled_knowledge": distilled_knowledge if distilled_knowledge else "",
+            "evolution_distilled_knowledge": evolution_distilled_knowledge if evolution_distilled_knowledge else "",
+            "success_factor_memory": success_factor_memory if success_factor_memory else "",
+            "evolution_success_factor_memory": evolution_success_factor_memory if evolution_success_factor_memory else "",
+            "evolution_failure_memory": evolution_failure_memory if evolution_failure_memory else "",
+            "long_term_memory": long_term_memory if long_term_memory else "",
             "REJECTED_FACTORS": rejected_text, # [NEW] Inject the formatted failure list
         }
         system_prompt = render_prompt(system_prompt_template, context)
@@ -158,6 +168,11 @@ class HypothesisAgentV2(BaseAgent):
         initial_hypothesis = str(shared_context.payload.get("initial_hypothesis", ""))
         rag_text = str(shared_context.payload.get("rag_text", ""))
         distilled_knowledge = str(shared_context.payload.get("distilled_knowledge", ""))
+        evolution_distilled_knowledge = str(shared_context.payload.get("evolution_distilled_knowledge", ""))
+        success_factor_memory = str(shared_context.payload.get("success_factor_memory", ""))
+        evolution_success_factor_memory = str(shared_context.payload.get("evolution_success_factor_memory", ""))
+        evolution_failure_memory = str(shared_context.payload.get("evolution_failure_memory", ""))
+        long_term_memory = str(shared_context.payload.get("long_term_memory", ""))
         history = list(shared_context.payload.get("hypothesis_feedback_history", []))
                                      
         history_limit = int(prompt_meta.get("default_history_limit", 6))
@@ -176,6 +191,11 @@ class HypothesisAgentV2(BaseAgent):
                     initial_hypothesis=initial_hypothesis,
                     rag_text=rag_text,
                     distilled_knowledge=distilled_knowledge,
+                    evolution_distilled_knowledge=evolution_distilled_knowledge,
+                    success_factor_memory=success_factor_memory,
+                    evolution_success_factor_memory=evolution_success_factor_memory,
+                    evolution_failure_memory=evolution_failure_memory,
+                    long_term_memory=long_term_memory,
                     history=history,
                     history_limit=history_limit,
                     rejected_factors=list(shared_context.payload.get("rejected_factors", [])),

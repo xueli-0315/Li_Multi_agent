@@ -9,6 +9,7 @@ import pandas as pd
 
 from factor_runtime.evolution.expression_ga import ExpressionGA
 from factor_runtime.evolution.factor_subset_ga import FactorSubsetGA
+from factor_runtime.evolution.memory import load_evolution_memory_snapshot
 from factor_runtime.evolution.model_param_ga import ModelParamGA
 from factor_runtime.evolution.models import EvolutionConfig, FactorGenome
 from factor_runtime.evolution.runner import EvolutionRunner
@@ -244,6 +245,77 @@ class EvolutionGATests(unittest.TestCase):
             chromosome = ga.random_chromosome()
             mutated = ga.mutate(chromosome, config)
             self.assertEqual(set(chromosome), set(mutated))
+
+    def test_evolution_memory_snapshot_prioritizes_recent_success_and_records_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wiki_root = root / "factor_library" / "wiki"
+            evolved_wiki_dir = wiki_root / "evolved_factors"
+            evolved_dir = root / "factor_library" / "raw" / "evolved"
+            evolved_wiki_dir.mkdir(parents=True, exist_ok=True)
+            evolved_dir.mkdir(parents=True, exist_ok=True)
+
+            (wiki_root / "log.md").write_text(
+                "\n".join(
+                    [
+                        "# 因子发现流水账",
+                        "",
+                        "- **ingest** | 发现因子 [[20260527_000001_L1_I0_Recent_Success|Recent_Success]] (L1 I0) | Sharpe: 0.1234",
+                        "- **ingest** | 发现因子 [[20260527_000002_L2_I0_Other_Success|Other_Success]] (L2 I0) | Sharpe: 0.0567",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (evolved_wiki_dir / "index.md").write_text(
+                "\n".join(
+                    [
+                        "# Evolved Factors Index",
+                        "",
+                        "| [Recent_Success](./EVO_20260527/recent_success.md) | EVO_20260527 | 1 | N/A | N/A | 0.1234 | 0.98 |",
+                        "| [Other_Success](./EVO_20260527/other_success.md) | EVO_20260527 | 1 | N/A | N/A | 0.0567 | 0.95 |",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (evolved_dir / "evolution_failures.jsonl").write_text(
+                "\n".join(
+                    [
+                        '{"run_id":"EVO_X","timestamp":"2026-05-27T00:00:00","type":"failed","name":"Failure_Seed","expression":"$close - $low","reason":"degenerate_self_operation","generation":1,"parents":["A","B"]}',
+                        '{"run_id":"EVO_X","timestamp":"2026-05-27T00:01:00","type":"rejected","name":"Failure_Seed","expression":"$open - $open","reason":"degenerate_self_operation","generation":1,"parents":["A","B"]}',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (evolved_dir / "distilled_lessons_evolution.md").write_text(
+                "# lessons\n\n- avoid self-operation\n- avoid recursive normalization\n",
+                encoding="utf-8",
+            )
+
+            config = EvolutionConfig(
+                panel_data_path=root / "panel.parquet",
+                seed_library_path=root / "seed_library.json",
+                log_root=root / "logs",
+                evolved_dir=evolved_dir,
+                wiki_dir=evolved_wiki_dir,
+                enable_llm_screening=False,
+            )
+            snapshot = load_evolution_memory_snapshot(config)
+            seeds = [
+                FactorGenome(name="Failure_Seed", expression="$close - $low"),
+                FactorGenome(name="Recent_Success", expression="$predictive"),
+                FactorGenome(name="Other_Success", expression="$inverse"),
+            ]
+            ranked = EvolutionRunner()._select_seed_population(seeds, config, memory_snapshot=snapshot)
+
+        self.assertIn("Recent_Success", snapshot.priority_seed_names)
+        self.assertIn("Failure_Seed", snapshot.penalty_seed_names)
+        self.assertIn("Recent_Success", snapshot.long_term_memory)
+        self.assertIn("avoid self-operation", snapshot.long_term_memory)
+        self.assertEqual(ranked[0].name, "Recent_Success")
+        self.assertEqual(ranked[-1].name, "Failure_Seed")
 
 
 if __name__ == "__main__":

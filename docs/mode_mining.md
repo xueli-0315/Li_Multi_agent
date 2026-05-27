@@ -1,35 +1,30 @@
-# Mining Mode：多智能体因子挖掘流程说明
+# Mining Mode：多智能体因子挖掘
 
-本文件说明 `main.py --mode mining` 与 `scripts/run_alpha_factor_mining_loop.py` 的完整流程。
-这一路径是“LLM 多智能体协作 + 确定性研究层”的主闭环，负责从研究假设一路走到因子验证、回测与反馈沉淀。
+`mining` 是项目的主工作流。它负责让 LLM 智能体围绕同一个研究方向持续迭代：提出假设、设计实验、生成因子、评估结果、压缩反馈。
 
-## 1. 这个 mode 是做什么的
+---
 
-`mining` mode 的目标不是直接做大规模 GA，也不是集中回测，而是让智能体按轮次进行研究闭环：
+## 1. 目标
 
-1. 提出或修正研究假设
-2. 设计可执行的因子实验
-3. 生成并校验因子实现
-4. 调用回测/研究流水线评估因子
-5. 把本轮结果压缩为下一轮可用的反馈
+这个 mode 的目标是：
 
-它更像“研究对话模式”，重点是持续迭代，而不是一次性大吞吐搜索。
+- 让研究过程可对话、可回放、可持续迭代
+- 让 LLM 专注于“研究判断”，把计算和回测交给确定性层
+- 把每轮结果压缩成下一轮更好的上下文
 
-## 2. 入口与 CLI
+一句话理解：
+
+> `mining = 研究假设生成 + 因子设计 + 因子验证 + 反馈沉淀`
+
+---
+
+## 2. 入口与全部 CLI
 
 ### 2.1 主入口
 
-推荐入口：
-
 ```bash
-python3 main.py --loop-count 1 --debug
+python3 main.py --mode mining --loop-count 1
 ```
-
-`main.py` 在 `--mode mining` 时会：
-
-1. 创建本轮运行目录
-2. 初始化 `progress.jsonl` 与 `llm_raw_io.jsonl`
-3. 启动 `scripts/run_alpha_factor_mining_loop.py`
 
 ### 2.2 脚本入口
 
@@ -37,158 +32,328 @@ python3 main.py --loop-count 1 --debug
 python3 scripts/run_alpha_factor_mining_loop.py --loop-count 1
 ```
 
-### 2.3 常用 CLI 参数
+### 2.3 最常用参数
 
-| 参数                     | 作用                   | 说明                                   |
-| ------------------------ | ---------------------- | -------------------------------------- |
-| `--loop-count`         | 运行多少轮 mining loop | 每轮都会完整跑一次智能体闭环           |
-| `--panel-data-path`    | panel 数据路径         | 默认是 `data/panel_data.parquet`     |
-| `--text-data-path`    | 原始非结构化文本路径   | JSONL/CSV，仅 mining mode 使用 |
-| `--debug-symbol-count`| debug panel symbol 上限 | 默认 20，用于 data bundle |
-| `--debug-time-steps`  | debug panel 时间点上限 | 默认 180，用于 data bundle |
-| `--write-data-artifacts` | 写出数据接口产物 | 生成 `data_bundle/` |
-| `--initial-direction`  | 初始研究方向           | 第 1 轮会优先注入到 hypothesis         |
-| `--initial-hypothesis` | 初始假设文本           | 作为第一轮种子假设                     |
-| `--stop-on-error`      | 遇错是否直接停止       | 默认失败后继续记录并进入下一轮         |
-| `--retry-per-round`    | 每轮失败后重试次数     | 适合临时 provider / 结构化输出错误恢复 |
-| `--debug`              | 输出更详细的调试日志   | 会额外写调试日志文件                   |
-| `--run-id`             | 脚本运行 ID            | 主要用于和 `main.py` 共用日志目录    |
+- `--loop-count`：跑多少轮
+- `--panel-data-path`：结构化 panel 路径
+- `--text-data-path`：可选市场文本输入
+- `--market-type`：`crypto | stock | futures`
+- `--domain-config`：域配置
+- `--symbol-alias-path`：symbol 别名
+- `--initial-direction`：初始研究方向
+- `--initial-hypothesis`：初始假设文本
+- `--debug-symbol-count`：debug panel symbol 上限
+- `--debug-time-steps`：debug panel 时间步上限
+- `--write-data-artifacts`：写出 `data_bundle`
+- `--stop-on-error`：遇错是否停止
+- `--retry-per-round`：单轮失败重试次数
+- `--debug`：更详细日志
 
-## 3. 一轮 mining 的实际流程
+---
 
-`scripts/run_alpha_factor_mining_loop.py` 里每轮都围绕 `AlphaFactorMiningWorkflow` 运行。
+## 3. 目标流程
 
-### 3.1 初始化
+```mermaid
+flowchart LR
+  A["输入：panel + 可选文本 + 初始方向"] --> B["HypothesisAgentV2<br/>提出/修正假设"]
+  B --> C["ExperimentDesignerAgent<br/>设计可执行实验"]
+  C --> D["FactorCoderAgent<br/>生成与校验表达式"]
+  D --> E["BacktestRunnerAgent<br/>研究层/回测评估"]
+  E --> F["FeedbackSummarizerAgent<br/>压缩反馈"]
+  F --> G["输出：下一轮上下文"]
+```
 
-启动时会做这些事：
+### 一轮里具体做什么
 
-1. 读取 `.env` 和 `.env.local`
-2. 初始化模型客户端
-3. 通过 `CryptoCrossSectionDomainAdapter` 加载 panel 数据，必要时再接入原始文本
-4. 生成共享上下文 `shared_payload`
-5. 建立本轮日志目录
+- **HypothesisAgentV2**：结合历史反馈和负面知识，提假设
+- **ExperimentDesignerAgent**：把假设拆成候选因子和任务计划
+- **FactorCoderAgent**：检查表达式是否合法、能不能算
+- **BacktestRunnerAgent**：调用研究层或回测引擎评估
+- **FeedbackSummarizerAgent**：把结果压成下一轮能用的知识
 
-如果传入 `--text-data-path`，初始化阶段会先把文本转成结构化特征，再生成：
+---
 
-- `source_data_desc`
-- `feature_schema`
-- `data_bundle/merged_panel.parquet`
-- `data_bundle/debug_panel.parquet`
+## 4. 每个 Agent 的输入与输出
 
-这些内容会进入 `shared_payload`，供 `HypothesisAgentV2` 和 `ExperimentDesignerAgent` 读取。
+### 4.1 HypothesisAgentV2
 
-### 3.2 HypothesisAgentV2
+**输入**
 
-这一阶段负责：
+- `scenario`
+- `direction`
+- `initial_hypothesis`
+- `rag_text`
+- `distilled_knowledge`
+- `hypothesis_feedback_history`
+- `rejected_factors`
 
-- 根据 `initial_direction`
-- 参考历史反馈
-- 参考负面知识
-
-生成本轮研究假设。
-
-输出通常会写到共享上下文中的：
+**输出**
 
 - `hypothesis`
 - `hypothesis_reasoning`
 - `hypothesis_structured`
 
-### 3.3 ExperimentDesignerAgent
+**它做的事**
 
-这一阶段把假设变成“能执行的研究方案”：
+- 从历史反馈里找方向
+- 结合负面知识和过去失败经验
+- 生成新假设或修正假设
 
-- 拆成因子候选
-- 生成任务计划
-- 形成实验说明
+---
 
-常见输出：
+### 4.2 ExperimentDesignerAgent
+
+**输入**
+
+- `scenario`
+- `hypothesis`
+- `available_features`
+- `data_time_step`
+- `data_time_step_description`
+- `hypothesis_feedback_history`
+- `rag_text`
+- `previous_factor_names`
+
+**输出**
 
 - `experiment_spec`
 - `task_plan`
 - `experiment_id`
 - `qlib_factor_experiment`
+- `preprocess_decision`
 
-### 3.4 FactorCoderAgent
+**它做的事**
 
-这一阶段负责把设计落成可执行因子：
+- 把假设拆成可执行的因子实验
+- 为每个候选因子生成表达式、描述、变量
+- 检查重复命名和表达式约束
+- 生成预处理决策，比如是否启用中性化、如何补齐
 
-- 检查表达式 DSL
-- 检查变量和函数是否存在
-- 检查窗口边界
-- 生成因子实现
-- 给出计算报告
+---
 
-常见输出：
+### 4.3 FactorCoderAgent
+
+**输入**
+
+- `scenario`
+- `experiment_spec`
+- `task_plan`
+- `available_features`
+- `panel_data_path`
+- `rejected_factor_failures`
+- `hypothesis`
+- `hypothesis_structured`
+
+**输出**
 
 - `factor_implementation`
 - `calculation_report`
+- `qlib_factor_experiment`
 
-### 3.5 BacktestRunnerAgent
+**它做的事**
 
-这一阶段负责评估因子。
+- 把实验设计落成可执行实现
+- 校验表达式能不能解析、能不能执行
+- 检查生成值是否有效、覆盖率是否足够
+- 记录每个 factor 的生成/失败状态
 
-当前回测尝试顺序是：
+---
 
-1. qlib 本地引擎路径
-2. `ResearchPipeline.run(...)` 研究层 fallback
-3. `ResearchPipeline.run_preprocess_only(...)` + LightGBM / sklearn + qlib 风格 fallback
-4. 全部失败时返回默认失败指标
+### 4.4 BacktestRunnerAgent
 
-它会产出：
+**输入**
+
+- `factor_implementation`
+- `calculation_report`
+- `qlib_factor_experiment`
+- `panel_data_path`
+- `target_column`
+- `available_features`
+- `market_type`
+
+**输出**
 
 - `backtest_report`
 - `metrics`
-- `per_factor_metrics`
+- `qlib_factor_experiment`
 
-### 3.6 FeedbackSummarizerAgent
+**它做的事**
 
-这一阶段把本轮结果压缩成下一轮可用的反馈：
+- 先尝试 Qlib 主路径
+- 再退到 `ResearchPipeline` deterministic fallback
+- 最后生成因子级 / 组合级指标
 
-- 提炼哪些因子表现更好
-- 总结哪些表达式模式不值得继续
-- 形成 `distilled_knowledge`
-- 更新下一轮可读的上下文
+**常见指标**
 
-## 4. 日志与产物
+- `IC`
+- `ICIR`
+- `Rank IC`
+- `Rank ICIR`
+- `coverage`
+- `turnover`
+- `sharpe`
+- `annualized_return`
+- `information_ratio`
+- `max_drawdown`
 
-`mining` mode 的输出通常包括：
+---
+
+### 4.5 FeedbackSummarizerAgent
+
+**输入**
+
+- `hypothesis`
+- `experiment_spec`
+- `factor_implementation`
+- `calculation_report`
+- `backtest_report`
+- `metrics`
+- `hypothesis_feedback_history`
+
+**输出**
+
+- `feedback`
+- `next_hypothesis_hint`
+- `distilled_knowledge`
+- `hypothesis_feedback_history`
+
+**它做的事**
+
+- 汇总本轮结果
+- 解释成功和失败原因
+- 提炼下一轮要避开的模式
+- 生成可写回上下文的长期知识
+
+---
+
+## 5. LLM wiki 是什么
+
+这里的“LLM wiki”不是单个文件，而是一组会被循环更新的知识门户。它的作用是把因子研究中的“经验”沉淀成可浏览、可回看、可复用的结构化知识。
+
+### 5.1 主要组成
+
+- `factor_library/wiki/index.md`：因子库首页
+- `factor_library/wiki/log.md`：最近发现流水账
+- `factor_library/wiki/factors/`：每个因子的详情页
+- `factor_library/wiki/hypotheses/`：假设分类页
+- `factor_library/wiki/failures/`：失败知识页
+- `factor_library/wiki/evolved_factors/`：演化因子门户
+
+### 5.2 它怎么接入 HypothesisAgent
+
+`HypothesisAgentV2` 当前不会直接把整棵 wiki 树完整塞进 prompt。它读取的是两个长期记忆入口：
+
+- `rag_text`
+- `distilled_knowledge`
+
+它们的来源分别是：
+
+1. **`rag_text`**
+   - 由 `CrossSectionDomainAdapter.build_initial_payload()` 生成
+   - 本质是当前 panel 的摘要：市场类型、样本范围、时间步长、特征概览、目标列
+   - 作用是给 `HypothesisAgentV2` 一个“我现在站在什么数据场景里”的背景记忆
+
+2. **`distilled_knowledge`**
+   - 由 `factor_library/raw/negative_knowledge/distilled_lessons.md` 读取
+   - 由 `distill_negative_knowledge.py` 从失败样本中持续提炼
+   - 作用是给 `HypothesisAgentV2` 一个“哪些套路已经失败过”的长期记忆
+
+此外，`hypothesis_feedback_history` 也会被一起送入，这样 agent 可以看到最近几轮的研究轨迹。
+
+### 5.3 wiki 是怎么变成长久记忆的
+
+`factor_library/wiki/` 本身是可浏览的知识门户。它先由后处理脚本生成，再通过更轻的输入字段进入 agent：
+
+```mermaid
+flowchart LR
+  A["成功因子 / 失败因子 / 反馈"] --> B["写入 factor_library/raw/*"]
+  B --> C["构建 wiki 页面"]
+  C --> D["生成 distilled_knowledge / rag_text"]
+  D --> E["HypothesisAgentV2 输入"]
+```
+
+当前链路里，wiki 的“长期记忆”主要体现在：
+
+- `factor_library/wiki/log.md` 记录最近发现
+- `factor_library/wiki/factors/` 和 `factor_library/wiki/hypotheses/` 保存可回看的结构化知识
+- `factor_library/wiki/failures/` 作为失败知识库
+- `distilled_knowledge` 把失败教训压缩后回灌到下一轮 hypothesis
+
+### 5.4 它怎么更新
+
+`mining` 每轮结束后，会做两类更新：
+
+1. **成功知识**
+   - 合格因子会写入 `factor_library/raw/all_factors_library.json`
+   - 同步生成 factor wiki 页面
+2. **失败知识**
+   - 失败样本会写入负面知识库
+   - 由 `distill_negative_knowledge.py` / `build_negative_wiki.py` 汇总成 wiki 页面
+
+### 5.5 你该看什么
+
+- 想看最近发现了什么因子：看 `factor_library/wiki/log.md`
+- 想看某个因子背后的假设：看 `factor_library/wiki/hypotheses/`
+- 想看某个因子的公式和指标：看 `factor_library/wiki/factors/`
+- 想看哪些套路已经失败：看 `factor_library/wiki/failures/`
+
+### 5.6 为什么要有 wiki
+
+因为只看日志太散，只看因子库又太静。wiki 的作用是把“发现过程”变成“知识目录”，让下次研究时能快速复用，而不是每次从头猜。
+
+### 5.7 如果你想把 wiki 页面直接喂给 agent
+
+当前实现默认不会把整页 wiki 全量拼进 prompt；如果你希望增强检索，可以在构造 `rag_text` 时把：
+
+- `factor_library/wiki/index.md`
+- `factor_library/wiki/log.md`
+- `factor_library/wiki/hypotheses/*.md`
+- `factor_library/wiki/factors/*.md`
+
+选取一部分摘要后拼接进去。现在的代码已经提供了 `rag_text` 这个插槽，所以这种增强是低成本的。
+
+---
+
+## 6. 日志和产物
+
+`mining` 运行后，通常会得到这些东西：
 
 - `logs/alpha_factor_mining_loop/<run_id>/progress.jsonl`
 - `logs/alpha_factor_mining_loop/<run_id>/structured.jsonl`
 - `logs/alpha_factor_mining_loop/<run_id>/llm_raw_io.jsonl`
 - `logs/alpha_factor_mining_loop/<run_id>/loop_###.json`
+- `logs/alpha_factor_mining_loop/<run_id>/data_bundle/`
+- `artifacts/trajectory_pool.json`
+- `factor_library/`
 
-### 4.1 progress.jsonl
+你通常会优先看：
 
-这是轻量过程日志，适合看每轮有没有跑起来、跑到了哪一步、哪个 agent 开始/结束。
+1. `progress.jsonl`：有没有跑起来
+2. `loop_###.json`：这一轮到底做了什么
+3. `llm_raw_io.jsonl`：是不是 prompt / provider 出了问题
+4. `factor_library/wiki/`：结果有没有沉淀成知识
 
-### 4.2 structured.jsonl
+---
 
-这是结构化事件流，适合做离线分析与回放。
-
-### 4.3 llm_raw_io.jsonl
-
-这是原始 LLM 请求/响应记录，主要用于排查 prompt、结构化输出、provider 问题。
-
-### 4.4 loop_###.json
-
-这是单轮完整轨迹，包括：
-
-- 每个 agent 的输入快照
-- 每个 agent 的输出快照
-- 是否出错
-- 最终共享上下文
-
-## 5. 这个 mode 的适用场景
+## 7. 适用场景
 
 适合：
 
-- 想让智能体持续探索研究方向
-- 想保留对话式、渐进式的研究闭环
-- 想看每轮 hypothesis -> experiment -> factor -> backtest -> feedback 的完整轨迹
+- 想持续探索新因子
+- 想保留研究对话和每轮反馈
+- 想让 LLM 负责“研究判断”
 
 不适合：
 
-- 想批量搜索很多表达式
-- 想一次性优化因子库
-- 想做集中式模型训练和最终回测
+- 批量搜索很多表达式
+- 大规模 GA 优化
+- 最终的集中模型训练和组合回测
+
+---
+
+## 8. 和其他 mode 的边界
+
+- `mining`：负责研究闭环
+- `evolution`：负责因子 / 参数优化
+- `batch-backtest`：负责最终验证
+- 非结构化报告入库：只给 `mining` 提供更好的上下文

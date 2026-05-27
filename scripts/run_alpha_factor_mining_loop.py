@@ -21,7 +21,7 @@ from llm.providers import (
 from factor_runtime import FactorLibraryManager
 from infra import StructuredLogger
 from core import reset_current_loop_index, set_current_loop_index
-from adapters import CryptoCrossSectionDomainAdapter
+from adapters import CrossSectionDomainAdapter
 from workflows import AlphaFactorMiningWorkflow
 from workflows.trajectory_pool_helper import TrajectoryPool
 
@@ -224,6 +224,9 @@ def main() -> None:
                         help="Path to panel data parquet (default: data/panel_data.parquet)")
     parser.add_argument("--text-data-path", default="",
                         help="Optional local JSONL/CSV market text data to merge into the panel")
+    parser.add_argument("--market-type", choices=["crypto", "stock", "futures"], default="crypto")
+    parser.add_argument("--domain-config", default="", help="Optional domain adapter YAML config path.")
+    parser.add_argument("--symbol-alias-path", default="", help="Optional symbol alias YAML/JSON path.")
     parser.add_argument("--debug-symbol-count", type=int, default=20,
                         help="Maximum symbols in generated debug panel")
     parser.add_argument("--debug-time-steps", type=int, default=180,
@@ -251,13 +254,16 @@ def main() -> None:
         raw_io_logger=lambda payload: _append_raw_llm_io(raw_llm_io_file, payload)
     )
     panel_data_path = Path(args.panel_data_path) if args.panel_data_path else PROJECT_ROOT / "data" / "panel_data.parquet"
-    adapter = CryptoCrossSectionDomainAdapter(
+    adapter = CrossSectionDomainAdapter(
         panel_data_path,
+        market_type=args.market_type,
         text_data_path=args.text_data_path or None,
         artifact_dir=log_dir / "data_bundle",
         write_artifacts=args.write_data_artifacts or bool(args.text_data_path),
         debug_symbol_count=args.debug_symbol_count,
         debug_time_steps=args.debug_time_steps,
+        domain_config_path=args.domain_config or None,
+        symbol_alias_path=args.symbol_alias_path or None,
     )
     shared_payload = adapter.build_initial_payload()
     default_initial_direction = "山寨币在过热时可能会发生反转，基于这个假设可以发掘盈利因子。"

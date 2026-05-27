@@ -1,0 +1,154 @@
+{
+  "document_title": "Cryptocurrency Technical Analysis Tools & BOTs Development",
+  "document_date": "2021-10-01",
+  "document_timestamp": "2021-10-01T00:00:00Z",
+  "summary": "A bachelor thesis describing the development of a web application and automated trading bot for cryptocurrencies, using technical analysis indicators (MACD, RSI) on the Binance platform. The bot specifically trades ADA (Cardano) against USDT. The thesis covers AWS deployment, algorithm design, and backtesting of strategies. No actionable market-moving events are identified; the report is a technical development description, not an investment thesis.",
+  "primary_assets": [
+    "{'NAME': 'CARDANO', 'SYMBOL_CANDIDATE': 'ADAUSDT', 'ROLE': 'PRIMARY_ASSET'}"
+  ],
+  "panel_symbols": [
+    "ADAUSDT"
+  ],
+  "events": [
+    {
+      "symbol": "ADAUSDT",
+      "asset_role": "primary_asset",
+      "title": "Bot development for ADA/USDT automated trading on Binance",
+      "body": "The thesis describes building a BOT that automatically exchanges between USDT and ADA on Binance using MACD and RSI technical indicators. Users can select indicators after checking profitability.",
+      "event_type": "other",
+      "direction": "neutral",
+      "confidence": 0.6,
+      "evidence": [
+        "BOT exchanges the assets between USDT and ADA",
+        "ADA (the coin of the Cardano blockchain)",
+        "users are going to be able to decide the technical indicators to utilize after checking the profitability"
+      ],
+      "timestamp": "2021-10-01T00:00:00Z"
+    }
+  ],
+  "ignored_mentions": [
+    {
+      "mention": "Bitcoin",
+      "reason": "Used as illustrative example for MACD/RSI explanation; not a primary asset of the bot described. Also not in panel universe."
+    },
+    {
+      "mention": "Ethereum",
+      "reason": "Used as blockchain comparison example, not a primary asset."
+    },
+    {
+      "mention": "Cardano",
+      "reason": "Ignored in chunks where only used as blockchain example; primary asset status is captured in events when linked to trading bot."
+    },
+    {
+      "mention": "Binance",
+      "reason": "Ordinary platform name, not a tradable asset."
+    },
+    {
+      "mention": "Tesla",
+      "reason": "Company mentioned in historical context of crypto adoption, not a crypto asset."
+    },
+    {
+      "mention": "Elon Musk",
+      "reason": "Person name, not an asset."
+    },
+    {
+      "mention": "AWS",
+      "reason": "Technical infrastructure reference, not a crypto asset."
+    },
+    {
+      "mention": "MACD",
+      "reason": "Technical indicator, not an asset."
+    },
+    {
+      "mention": "RSI",
+      "reason": "Technical indicator, not an asset."
+    },
+    {
+      "mention": "cryptocurrencies",
+      "reason": "Generic class term, not a specific asset."
+    },
+    {
+      "mention": "Proof of Work",
+      "reason": "Consensus mechanism concept, not an asset."
+    },
+    {
+      "mention": "Proof of Stake",
+      "reason": "Consensus mechanism concept, not an asset."
+    },
+    {
+      "mention": "Coinbase",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "Huobi Global",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "FTX",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "KuCoin",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "Kraken",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "Bitfinex",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "Bithumb",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "Gate.io",
+      "reason": "Exchange platform mentioned as example, not a primary asset."
+    },
+    {
+      "mention": "Amazon S3",
+      "reason": "Technical infrastructure component, not a crypto asset."
+    },
+    {
+      "mention": "Cloudfront",
+      "reason": "Technical infrastructure component, not a crypto asset."
+    },
+    {
+      "mention": "Route 53",
+      "reason": "Technical infrastructure component, not a crypto asset."
+    },
+    {
+      "mention": "API Gateway",
+      "reason": "Technical infrastructure component, not a crypto asset."
+    },
+    {
+      "mention": "React",
+      "reason": "Programming framework, not a crypto asset."
+    },
+    {
+      "mention": "Python",
+      "reason": "Programming language, not a crypto asset."
+    },
+    {
+      "mention": "Node.js",
+      "reason": "Programming runtime, not a crypto asset."
+    },
+    {
+      "mention": "GitHub",
+      "reason": "Code hosting platform, not a crypto asset."
+    }
+  ],
+  "evidence": [
+    "Thesis abstract states purpose is creating web app and automated trading BOT using technical analysis indicators.",
+    "BOT specifically trades ADA (Cardano) against USDT on Binance using MACD and RSI signals.",
+    "Figure 1 and 2 show MACD and RSI plots dated October 1, 2021.",
+    "Document is a technical development description, not an investment report or market opinion.",
+    "No price targets, market forecasts, or actionable trading recommendations are provided."
+  ],
+  "source_file": "/Users/zhanghengxuelihotmail.com/Desktop/Multi-agent-factor-mining-main/data/unstructured/reports/Zanni_Alessandro.pdf",
+  "extractor_used": "agent",
+  "filtered_events": [],
+  "document_hash": "04145cdb0155f137"
+}

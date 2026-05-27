@@ -1,0 +1,51 @@
+crypto:
+  market: crypto_cross_section
+  scenario: panel_data_cross_section_factor_mining
+  direction: discover cross-sectional alpha factors with robust turnover control
+  target_column: returns_1d
+  feature_whitelist:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - vwap
+    - funding_rate
+    - open_interest
+    - oi_change_pct
+    - long_liq
+    - short_liq
+
+stock:
+  market: stock_cross_section
+  scenario: panel_data_cross_section_factor_mining
+  direction: discover stock cross-sectional alpha factors with robust turnover control
+  target_column: returns_1d
+  feature_whitelist:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - vwap
+    - amount
+    - turnover
+    - market_cap
+    - industry
+
+futures:
+  market: futures_cross_section
+  scenario: panel_data_cross_section_factor_mining
+  direction: discover futures cross-sectional alpha factors with robust turnover control
+  target_column: returns_1d
+  feature_whitelist:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - vwap
+    - open_interest
+    - basis
+    - term_structure
+    - roll_yield

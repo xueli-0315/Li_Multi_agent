@@ -1,61 +1,80 @@
-# Data Interface Mode Guide
+# Data Interface：统一 panel 与文本特征接口
 
-本文件说明项目新增的 RD-Agent 风格轻量数据接口。它不是新的运行 mode。当前版本里，原始非结构化文本只接入 `mining` mode；`evolution` 和 `batch-backtest` 只消费结构化 panel 与因子库。
+这个文档说明项目的轻量数据接口。它不是新的运行 mode，而是给 `mining` 提供一个更清晰的数据入口。
 
-## 1. 设计目标
+---
 
-数据接口负责把不同来源的数据统一成项目内部可执行的 panel：
+## 1. 目标
 
-- 主数据仍然是 `data/panel_data.parquet`
-- index 固定为 `datetime, symbol`
-- 非结构化新闻 / 研报摘要 / 市场文本先转成结构化特征，供 `mining` mode 的 LLM 上下文使用
-- LLM 看到的是自动生成的 `source_data_desc`
-- `mining` 入口可以同时拿到 `merged_panel.parquet` 和 `source_data_desc`
+这个接口做两件事：
 
-这个设计借鉴 RD-Agent 的数据契约思想，但不依赖 RD-Agent，不引入 Docker / A股 qlib 数据栈。
+1. 把结构化市场数据统一成项目内部可执行的 panel
+2. 把本地市场文本整理成可以和 panel 对齐的文本特征
 
-## 2. Public Interface
+简化理解：
 
-核心代码在 `src/adapters/data_interface.py`。
+- `panel_data.parquet` 是主数据
+- `--text-data-path` 是辅助文本输入
+- `mining` 会拿到合并后的 `data_bundle`
+- `evolution` 和 `batch-backtest` 继续只看结构化 panel 和因子库
 
-```python
-PanelDataAdapter(panel_data_path).load()
-MarketTextAdapter(text_data_path, panel_index, time_step).load_features()
-UnifiedMarketDataAdapter(panel_data_path, text_data_path=None).load()
+---
+
+## 2. 入口与全部 CLI
+
+### 2.1 最常用的入口
+
+```bash
+python3 main.py --mode mining \
+  --loop-count 1 \
+  --panel-data-path data/panel_data.parquet \
+  --text-data-path data/unstructured/auto_market_text.jsonl
 ```
 
-`load()` 返回 `DataBundle`：
+### 2.2 适合 data interface 的参数
 
-- `panel`: full panel，必要时已合并文本特征
-- `debug_panel`: 小样本 panel，用于快速检查
-- `source_data_desc`: 给 LLM 的数据说明
-- `feature_schema`: index、特征列、目标列、文本特征列、时间范围、缺失率
-- `artifacts`: 写出的文件路径
-- `warnings`: 数据问题或降级原因
+- `--panel-data-path`：主 panel 路径
+- `--text-data-path`：本地文本 JSONL / CSV
+- `--market-type`：`crypto | stock | futures`
+- `--domain-config`：域配置 YAML
+- `--symbol-alias-path`：symbol 别名映射
+- `--debug-symbol-count`：debug panel 的 symbol 上限
+- `--debug-time-steps`：debug panel 的时间步上限
+- `--write-data-artifacts`：即使没有文本，也写出 `data_bundle`
 
-## 3. 非结构化文本格式
+### 2.3 非结构化报告入库入口
 
-`--text-data-path` 支持 `.jsonl`、`.json`、`.csv`。推荐 JSONL：
-
-```json
-{"timestamp":"2025-12-20T08:30:00Z","symbol":"AAVEUSDT","source":"sample_news","title":"AAVE partnership drives positive adoption narrative","body":"A new partnership supports bullish growth expectations.","url":"https://example.com/aave"}
+```bash
+python3 scripts/ingest_unstructured_reports.py \
+  --input-dir data/unstructured/reports \
+  --output data/unstructured/auto_market_text.jsonl \
+  --panel-data-path data/panel_data.parquet \
+  --market-type crypto \
+  --extractor agent
 ```
 
-必需字段：
+`agent` 是默认方式，`rules` 是离线 fallback。
 
-- `timestamp`
-- `symbol`
+---
 
-可选字段：
+## 3. 目标流程
 
-- `source`
-- `title`
-- `body`
-- `url`
+```mermaid
+flowchart LR
+  A["结构化 panel"] --> D["UnifiedMarketDataAdapter"]
+  B["本地文本 JSONL / CSV"] --> C["MarketTextAdapter"]
+  C --> D
+  D --> E["DataBundle"]
+  E --> F["mining context"]
+```
 
-v1 使用确定性词典规则提取特征，不在 adapter 内调用 LLM。
+### 文本对齐怎么做
 
-默认文本特征：
+- 先读取 `timestamp` 和 `symbol`
+- 再按 panel 的 bar 时间对齐
+- 最后做 left join，把文本特征挂到 `(datetime, symbol)` 上
+
+### 默认文本特征
 
 - `news_count`
 - `news_sentiment_score`
@@ -63,75 +82,64 @@ v1 使用确定性词典规则提取特征，不在 adapter 内调用 LLM。
 - `policy_event_flag`
 - `liquidity_event_score`
 
-这些特征会按 panel 的 bar 时间对齐到 `(datetime, symbol)`，再 left join 到 panel。
+---
 
-## 4. 文本特征配置
+## 4. 日志和产物
 
-Data interface 默认读取 `configs/data_interface.yaml`。也可以在 `.env` 中指定其他配置文件：
-
-```env
-DATA_INTERFACE_CONFIG_PATH=configs/data_interface.yaml
-```
-
-配置文件支持：
-
-- `text_feature_columns`: 输出的文本特征列
-- `required_columns`: 输入文本数据的必需字段，默认是 `timestamp` 和 `symbol`
-- `lexicon.positive_words`: 正向情绪词
-- `lexicon.negative_words`: 负向情绪词
-- `lexicon.risk_words`: 风险事件词
-- `lexicon.policy_words`: 政策/监管事件词
-- `lexicon.liquidity_words`: 流动性事件词
-
-如果配置文件缺失或格式错误，代码会回退到内置默认值，并把原因写入 `DataBundle.warnings`。
-
-## 5. CLI 用法
-
-当前原始文本输入只推荐在 `mining` mode 使用：
-
-```bash
---text-data-path data/unstructured/sample_crypto_news.jsonl
---debug-symbol-count 20
---debug-time-steps 180
---write-data-artifacts
-```
-
-示例：
-
-```bash
-PYTHONPATH=src python3 main.py --mode mining \
-  --loop-count 1 \
-  --text-data-path data/unstructured/sample_crypto_news.jsonl
-```
-
-## 6. Artifacts
-
-当提供 `--text-data-path` 或 `--write-data-artifacts` 时，会写出：
+当开启 data interface 或文本输入后，会写出这些产物：
 
 - `data_bundle/merged_panel.parquet`
 - `data_bundle/debug_panel.parquet`
 - `data_bundle/source_data_desc.md`
 - `data_bundle/feature_schema.json`
 
-`mining` 入口会把 artifacts 写到本次 `logs/alpha_factor_mining_loop/<run_id>/data_bundle/`。
+在 `mining` 里，这些内容会落到：
 
-## 7. 和因子表达式的关系
+- `logs/alpha_factor_mining_loop/<run_id>/data_bundle/`
 
-启用文本数据后，文本特征会进入 `available_features`。因此 `mining` 里的 LLM 可以生成这样的候选表达式：
+对于非结构化报告入库，还会额外生成：
 
-```python
-"RANK($news_sentiment_score) - RANK($risk_event_count)"
-"TS_MEAN($liquidity_event_score, 5) * SIGN($funding_rate)"
+- `data/unstructured/report_summaries/*.json`
+- `logs/report_ingestion/RPT_*/summary.json`
+- `logs/report_ingestion/RPT_*/progress.jsonl`
+- `logs/report_ingestion/RPT_*/loop_*.json`
+
+---
+
+## 5. 适用场景
+
+适合：
+
+- 你有一批新闻、公告、研报、社媒文本
+- 你想让 `mining` 看到文本背景
+- 你想让股票 / 期货 / crypto 使用同一套数据接口
+
+不适合：
+
+- 让 `evolution` 直接读原始文本
+- 让 `batch-backtest` 直接读原始文本
+- 把没有 `timestamp` / `symbol` 的杂乱文本直接丢进来
+
+---
+
+## 6. 配置
+
+默认配置文件：
+
+```text
+configs/data_interface.yaml
 ```
 
-如果不传 `--text-data-path`，默认行为与原项目一致，只使用 crypto panel 的结构化列。
+支持通过环境变量覆盖：
 
-## 8. 和 evolution / batch-backtest 的边界
+```env
+DATA_INTERFACE_CONFIG_PATH=configs/data_interface.yaml
+```
 
-当前建议的项目边界是：
+可以配置：
 
-- 原始非结构化文本：只给 `mining` mode
-- `evolution`：只优化结构化表达式、因子子集、模型参数
-- `batch-backtest`：只验证结构化 panel + 已接受因子库
+- 输出文本特征列
+- 必需输入字段
+- 正向 / 负向 / 风险 / 政策 / 流动性词典
 
-如果未来某个文本衍生因子必须进入 `evolution` 或 `batch-backtest`，请先把它固化成结构化 panel 列，再把这份 enriched panel 作为新的 `panel_data.parquet` 输入后续 mode，而不是让后续 mode 直接读取原始文本。
+如果配置文件缺失或格式错误，系统会回退到内置默认值，并把原因写入 `DataBundle.warnings`。
