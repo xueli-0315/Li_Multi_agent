@@ -424,6 +424,7 @@ PYTHONPATH=src python3 -m unittest tests.test_research_pipeline -v
 - `logs/alpha_factor_mining_loop/<run_id>/llm_raw_io.jsonl`
 - `artifacts/debug_logs/debug_<timestamp>.log`
 - `artifacts/trajectory_pool.json`
+- `artifacts/trajectory_pool/trajectory_pool_*.json`
 - `logs/evolution_loop/EVO_*/progress.jsonl`：包含 run 级事件和每一代的 population 快照
 - `logs/evolution_loop/EVO_*/structured.jsonl`：记录表达式候选、子集候选、模型参数候选及 generation 快照
 - `logs/evolution_loop/EVO_*/loop.json`
