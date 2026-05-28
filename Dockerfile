@@ -11,12 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
-
 COPY . /app
 
 ENV PYTHONPATH=/app/src
 ENV BACKTEST_ENGINE=qlib
+
+RUN pip install --upgrade pip && pip install -e .
 
 CMD ["python", "main.py", "--loop-count", "1"]
