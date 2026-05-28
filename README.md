@@ -181,6 +181,15 @@ flowchart LR
 
 ## 3. 快速开始
 
+如果你想尽量少装本地依赖，先走 Docker 会更省心：
+
+```bash
+docker build -t multi-agent-factor-mining .
+docker run --rm --env-file .env -v "$PWD:/app" multi-agent-factor-mining
+```
+
+第一次拉仓库时，建议先把根目录的 [.env.example](./.env.example) 复制成 `.env` 再填密钥。
+
 ### 3.1 安装
 
 ```bash
@@ -196,6 +205,8 @@ LLM_PROVIDER=zhipu
 ZHIPU_API_KEY=your_api_key
 ZHIPU_MODEL=glm-4-flash
 ```
+
+如果你是第一次从 GitHub 拉代码，最省事的方式是直接复制仓库根目录的 [.env.example](./.env.example) 作为本地 `.env` 起点，然后再填自己的密钥。
 
 常见 provider：
 
@@ -470,3 +481,14 @@ python3 scripts/test_validator.py
 - `docs/mode_mining.md`
 - `docs/mode_evolution.md`
 - `docs/mode_batch_backtest.md`
+
+---
+
+## 8. 待完成事项
+
+- 放入更多平台与标的接口，例如 `Tushare`、`AkShare`、`BaoStock`、`MySQL`，并逐步扩展到股票、期货等市场。
+- 让 LLM 能定时读取 `data/unstructured/reports/`，自动分析报告并持续转化为结构化数据。
+- 增加更多 LLM 选择，并按 agent 职责分层配置：复杂规划类 agent 用更强模型，重复任务多的 agent 用更便宜模型。
+- 增加可视化面板，把所有 mode 与未来功能的输入、输出、日志、结果整理成不会看代码的用户也能直接操作的界面。
+- 优化 `mining` mode 的 agents，并为 `evolution` 与 `batch-backtest` 增加更多可选 agent 协作能力，同时继续优化非结构数据转化 agent。
+- 继续提升非结构数据转化 agent 的丰富性，让它能处理更多报告类型、证据粒度与事件抽取场景。
