@@ -23,3 +23,6 @@ factor_library/raw/negative_knowledge/all_failures.jsonl
 docs/factor_evolved.md
 docs/optimization_walkthrough.md
 .vscode/settings.json
+data/unstructured/report_summaries
+data/unstructured/auto_market_text.jsonl
+data/unstructured/sample_crypto_news.jsonl
