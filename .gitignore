@@ -18,6 +18,7 @@ factor_library/wiki/
 factor_library/raw/evolved/
 factor_library/raw/factor_codes/
 factor_library/raw/*.bak
+factor_library/archive
 factor_library/raw/negative_knowledge/all_failures.jsonl
 docs/factor_evolved.md
 docs/optimization_walkthrough.md
