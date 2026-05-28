@@ -1,0 +1,1 @@
+def get_factor(): return 'TS_MEAN(($close - $close) / ($high - $close)) / ($high - $low)'

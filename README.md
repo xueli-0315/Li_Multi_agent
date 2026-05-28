@@ -104,6 +104,18 @@ flowchart LR
 - `results/batch_backtest/BATCH_*/`
 - `logs/batch_backtest/BATCH_*/`
 
+**补充说明**
+- `results/` 是主结果目录，面向人直接看回测结论、预测和图表
+- `mlruns/` 如果在你的本地环境里被 MLflow 或兼容组件启用，会作为更底层的实验追踪目录出现
+- 本仓库当前代码不直接把 `mlruns/` 当作主输出管理；它更像辅助检查层，而不是 `batch-backtest` 的核心交付物
+- 快速打开它的常用方式是：
+
+```bash
+mlflow ui --backend-store-uri file:./mlruns
+```
+
+前提是你的本地环境真的在写 `mlruns/`；如果没有写入，这个命令也能启动 UI，但列表可能是空的。
+
 ### 2.4 📚 非结构化报告提取
 
 这个流程不是新的运行模式，而是给 `mining` 提供更好的输入来源。
@@ -129,6 +141,41 @@ flowchart LR
 - `logs/report_ingestion/RPT_*/`
 
 `agent` 是默认提取方式；如果 LLM 请求失败，会自动回退到 `rules`。
+
+### 2.5 🧠 LLM wiki / 长期记忆 / Batch-Backtest 输入
+
+这里的 “LLM wiki” 不是单个文件，而是一套统一知识入口。`mining` 和 `evolution` 都会通过同一个 `knowledge_store` 读取长期记忆，只是进入工作流后的作用不同。
+
+**`mining` 的记忆**
+- 短期记忆：
+  当前 run 的共享上下文、每轮 `feedback`、`next_hypothesis_hint`、`hypothesis_feedback_history`
+  每 5 轮还会把失败样本进一步蒸馏，推动短期反馈向长期经验迁移
+- 长期记忆：
+  `factor_library/raw/negative_knowledge/distilled_lessons.md`
+  `factor_library/wiki/index.md`
+  `factor_library/wiki/log.md`
+  `factor_library/raw/all_factors_library.json`
+  `factor_library/raw/mutated_factors_library.json`
+  `factor_library/raw/evolved/evolution_failures.jsonl`
+  `factor_library/raw/evolved/distilled_lessons_evolution.md`
+
+**`evolution` 的记忆**
+- 没有 `mining` 那种逐轮对话式短期记忆
+- 但启动前会加载一份 memory snapshot，来源和 `mining` 基本相同
+- 这份 snapshot 会影响 seed 优先级、失败惩罚、候选排序，但不会改变 GA 主循环的确定性
+
+**知识和经验怎么积累**
+- 成功因子会持续进入 `all_factors_library.json` 和 `mutated_factors_library.json`
+- mining 失败经验会沉淀到 `distilled_lessons.md`
+- evolution 失败经验会沉淀到 `evolution_failures.jsonl` 与 `distilled_lessons_evolution.md`
+- `wiki/index.md` 与 `wiki/log.md` 会把“最近发现了什么”和“哪些结构值得复用”整理成统一门户
+- 随着时间沉淀，LLM 会更少重复试错，更快避开坏模式，也更容易沿着历史上有效的结构继续搜索
+
+**`batch-backtest` 的输入**
+- 默认只读取结构化 panel 与两个主因子库：
+  `factor_library/raw/all_factors_library.json`
+  `factor_library/raw/mutated_factors_library.json`
+- 它不会直接读取 `llm wiki`、失败 lessons 或原始文本，而是把前两种 mode 已经沉淀好的可执行因子拿来做集中筛选、训练和最终回测
 
 ---
 
@@ -237,6 +284,8 @@ python3 scripts/run_batch_backtest.py \
   --min-factors 10
 ```
 
+如果你的本地环境启用了 MLflow 追踪，运行 `batch-backtest` 后还可能看到 `mlruns/` 增长。它保存的是实验追踪信息，不是最终对外展示的回测结果；主结果仍然看 `results/batch_backtest/BATCH_*/`。
+
 ### 3.6 非结构化报告入库
 
 把原始报告放进 `data/unstructured/reports/`，然后执行：
@@ -325,6 +374,10 @@ panel_data.parquet
     ├──> mining -> hypothesis -> factor design -> backtest -> feedback
     ├──> evolution -> deterministic GA -> accepted factors
     └──> batch-backtest -> model training -> qlib/report artifacts
+
+factor_library/raw/* + factor_library/wiki/*
+    ├──> knowledge_store -> mining initial payload
+    └──> knowledge_store -> evolution memory snapshot
 
 raw reports
     └──> ingest_unstructured_reports.py

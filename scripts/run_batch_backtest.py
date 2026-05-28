@@ -47,7 +47,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_LIBRARY_PATHS = [
     PROJECT_ROOT / "factor_library" / "raw" / "all_factors_library.json",
     PROJECT_ROOT / "factor_library" / "raw" / "mutated_factors_library.json",
-    PROJECT_ROOT / "factor_library" / "raw" / "mutated_factor_library_old.json",
 ]
 
 DEFAULT_PANEL_PATH = PROJECT_ROOT / "data" / "panel_data.parquet"

@@ -19,6 +19,7 @@ from llm.providers import (
     ZhipuNativeProvider,
 )
 from factor_runtime import FactorLibraryManager
+from factor_runtime.factor_library_audit import run_factor_library_audit
 from infra import StructuredLogger
 from core import reset_current_loop_index, set_current_loop_index
 from adapters import CrossSectionDomainAdapter
@@ -87,6 +88,16 @@ def _require_env(keys: list[str]) -> dict[str, str]:
         missing_text = ", ".join(missing)
         raise RuntimeError(f"缺少环境变量: {missing_text}")
     return values
+
+
+def _write_factor_library_audit(log_dir: Path) -> tuple[str, str]:
+    result = run_factor_library_audit(project_root=PROJECT_ROOT, mode="report")
+    summary_path, report_path = result.write_to(
+        log_dir,
+        summary_name="factor_library_audit_summary.json",
+        report_name="factor_library_audit_report.md",
+    )
+    return str(summary_path), str(report_path)
 
 
 def _build_real_model_client(
@@ -430,8 +441,8 @@ def main() -> None:
             except Exception as e:
                 print(f"知识蒸馏失败: {e}")
 
-        # --- [NEW] 3. 同步 Wiki 门户 (成功 + 失败) ---
-        print(f"[Round {loop_index}] 步骤C: 同步 Factor Library Wiki (Portal)...")
+        # --- [NEW] 3. 同步成功 Wiki，并清理旧失败 Wiki 展示层 ---
+        print(f"[Round {loop_index}] 步骤C: 同步 Factor Library Wiki，并刷新负面知识视图...")
         try:
             wiki_script = PROJECT_ROOT / "scripts" / "build_factor_wiki.py"
             neg_wiki_script = PROJECT_ROOT / "scripts" / "build_negative_wiki.py"
@@ -457,8 +468,6 @@ def main() -> None:
             for loop_trace in traces
         ],
     }
-    print(json.dumps(output, ensure_ascii=False, indent=2))
-    
     # --- 最终全量同步 Wiki 知识库 (兜底) ---
     print("\n" + "="*50)
     print("正在执行最终 Wiki 同步...")
@@ -468,7 +477,17 @@ def main() -> None:
         print("Wiki 最终同步成功！")
     except Exception as e:
         print(f"Wiki 最终同步失败: {e}")
+
+    print("正在执行最终 Factor Library Audit...")
+    try:
+        audit_summary_path, audit_report_path = _write_factor_library_audit(log_dir)
+        output["factor_library_audit_summary"] = audit_summary_path
+        output["factor_library_audit_report"] = audit_report_path
+        print(f"Factor Library Audit 完成: {audit_summary_path}")
+    except Exception as e:
+        print(f"Factor Library Audit 失败: {e}")
     print("="*50 + "\n")
+    print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

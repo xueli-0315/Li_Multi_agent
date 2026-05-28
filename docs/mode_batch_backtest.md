@@ -61,7 +61,6 @@ python3 scripts/run_batch_backtest.py
 - `data/panel_data.parquet`
 - `factor_library/raw/all_factors_library.json`
 - `factor_library/raw/mutated_factors_library.json`
-- `factor_library/raw/mutated_factor_library_old.json`
 
 ### 3.2 可选输入
 
@@ -74,8 +73,23 @@ python3 scripts/run_batch_backtest.py
 - 原始 PDF / DOCX / HTML / TXT / MD
 - 原始市场新闻
 - 原始文本 JSONL
+- `factor_library/wiki/index.md`
+- `factor_library/wiki/log.md`
+- `factor_library/raw/negative_knowledge/distilled_lessons.md`
+- `factor_library/raw/evolved/distilled_lessons_evolution.md`
 
 这些文本如果要进入 batch-backtest，必须先通过 `mining` 或 data interface 变成结构化 panel 或已沉淀文本特征。
+
+### 3.4 这两个因子库分别代表什么
+
+- `all_factors_library.json`
+  代表主 `mining` 工作流接受下来的成功因子
+- `mutated_factors_library.json`
+  代表 `evolution` 工作流接受下来的演化成功因子
+
+`batch-backtest` 默认会把这两份库一起读取、按表达式去重，再进入后面的 IC / ICIR 预筛选、模型训练和组合回测。
+
+所以它的输入不是 “LLM 的长期记忆”，而是 “前两个 mode 已经沉淀好的可执行因子资产”。
 
 ---
 
@@ -180,6 +194,32 @@ flowchart LR
 4. `figures/`：组合和收益图
 5. `batch_backtest_BATCH_<timestamp>.jsonl`：过程日志
 
+### 6.4 `mlruns` 是什么
+
+`mlruns/` 不是 batch-backtest 的主交付目录，它更像实验追踪层。
+
+如果你的本地环境启用了 MLflow 或兼容的追踪组件，跑 batch-backtest 之后，`mlruns/` 可能会增加新的 run 记录。里面通常保存：
+
+- 参数
+- 指标
+- 运行标签
+- 少量 artifacts 或中间产物引用
+
+它和 `results/` 的区别是：
+
+- `results/` 面向最终查看和归档，重点是 `summary.txt`、`results.json`、图表和预测文件
+- `mlruns/` 面向实验追踪，重点是每个 run 的参数、指标和元信息
+
+如果你要深入看一轮 batch-backtest 的试验过程，`results/` 适合先看结论，`mlruns/` 适合再看这一轮是怎么跑出来的。
+
+如果本地装了 MLflow，一般可以用类似下面的方式查看：
+
+```bash
+mlflow ui --backend-store-uri file:./mlruns
+```
+
+前提是你的环境真的在写 `mlruns/`；否则这个目录只是一个普通本地目录，不代表项目必须依赖它。
+
 ---
 
 ## 7. 适用场景
@@ -204,4 +244,3 @@ flowchart LR
 - `evolution`：负责因子 / 参数优化
 - `batch-backtest`：负责最终验证
 - 原始文本：不直接进入 batch-backtest
-

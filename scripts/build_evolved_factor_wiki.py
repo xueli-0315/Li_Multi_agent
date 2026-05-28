@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -33,14 +34,11 @@ def build_evolved_factor_wiki(
     library_path: Path = RAW_JSON,
     wiki_dir: Path = WIKI_DIR,
 ) -> dict[str, Any]:
+    if wiki_dir.exists():
+        shutil.rmtree(wiki_dir)
     wiki_dir.mkdir(parents=True, exist_ok=True)
     if not library_path.exists():
-        index_path = wiki_dir / "index.md"
-        index_path.write_text(
-            "# 遗传演化因子索引 (Evolved Factors Index)\n\n暂无已接受的演化因子。\n",
-            encoding="utf-8",
-        )
-        return {"status": "skipped", "reason": "library_missing", "index": str(index_path)}
+        return {"status": "skipped", "reason": "library_missing", "count": 0}
 
     loaded = json.loads(library_path.read_text(encoding="utf-8"))
     records = loaded.get("records", []) if isinstance(loaded, dict) else []
@@ -53,12 +51,11 @@ def build_evolved_factor_wiki(
             continue
         run_id = str(record.get("run_id", "legacy")).strip() or "legacy"
         factor_name = str(record.get("factor_name", "unknown_factor")).strip() or "unknown_factor"
-        run_dir = wiki_dir / run_id
-        run_dir.mkdir(parents=True, exist_ok=True)
-        file_name = f"{slugify(factor_name)}.md"
-        page_path = run_dir / file_name
+        generation = int(record.get("loop_round", record.get("generation", 0)) or 0)
+        intra_loop_index = int(record.get("intra_loop_index", 0) or 0)
+        file_name = f"{run_id}_L{generation}_I{intra_loop_index}_{factor_name}.md"
+        page_path = wiki_dir / file_name
         expression = str(record.get("factor_expression", "")).strip()
-        generation = int(record.get("loop_round", 0) or 0)
         parent_1 = str(record.get("parent_1", "N/A"))
         parent_2 = str(record.get("parent_2", "N/A"))
         source = str(record.get("source", "expression_ga"))
@@ -74,23 +71,42 @@ def build_evolved_factor_wiki(
         ) or "| N/A | N/A |"
 
         page_path.write_text(
-            f"""# 演化因子详情：{factor_name}
+            f"""---
+name: {factor_name}
+run_id: {run_id}
+loop: {generation}
+index: {intra_loop_index}
+expression: "{expression}"
+rank_ic: {rank_ic if rank_ic is not None else 0}
+coverage: {coverage if coverage is not None else 0}
+source: {source}
+---
 
-## 元数据
+# 演化因子详情：{factor_name}
+
+## 0. 追踪信息
 - **Run ID**: `{run_id}`
 - **Generation**: `{generation}`
+- **Intra-loop Index**: `{intra_loop_index}`
 - **Source**: `{source}`
 - **Parent 1**: `{parent_1}`
 - **Parent 2**: `{parent_2}`
 - **Fitness**: `{fitness_text}`
 
-## 因子表达式
+## 1. 核心公式
 `{expression}`
 
-## 指标
+## 2. 演化来源
+> [!NOTE]
+> 该因子由 evolution mode 接受并写入 `factor_library/raw/mutated_factors_library.json`。
+
+## 3. 绩效指标
 | 指标 | 数值 |
 | :--- | :--- |
 {metric_rows}
+
+## 4. 溯源
+- **代码文件**: `raw/factor_codes/{record.get('factor_file', f"{factor_name}.py")}` (逻辑链接)
 """,
             encoding="utf-8",
         )
@@ -103,30 +119,22 @@ def build_evolved_factor_wiki(
                 "parent_2": parent_2,
                 "rank_ic": rank_ic,
                 "coverage": coverage,
-                "page_link": f"./{run_id}/{file_name[:-3]}.md",
+                "page_link": f"evolved_factors/{file_name[:-3]}",
             }
         )
 
-    rows.sort(key=lambda item: (item["run_id"], item["generation"], item["factor_name"]))
-    index_lines = [
-        "# 遗传演化因子索引 (Evolved Factors Index)",
-        "",
-        "> [!NOTE]",
-        "> 本目录收录了所有通过遗传算法演化并通过确定性阈值的因子。",
-        "",
-        "| 因子名称 | Run ID | 演化代数 | 父代 1 | 父代 2 | Rank IC | Coverage |",
-        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
-    ]
-    for row in rows:
-        rank_ic = "N/A" if row["rank_ic"] is None else f"{row['rank_ic']:.6f}"
-        coverage = "N/A" if row["coverage"] is None else f"{row['coverage']:.3f}"
-        index_lines.append(
-            f"| [{row['factor_name']}]({row['page_link']}) | {row['run_id']} | {row['generation']} | "
-            f"{row['parent_1']} | {row['parent_2']} | {rank_ic} | {coverage} |"
-        )
-    index_path = wiki_dir / "index.md"
-    index_path.write_text("\n".join(index_lines) + "\n", encoding="utf-8")
-    return {"status": "completed", "index": str(index_path), "count": len(rows)}
+    if wiki_dir.resolve() == WIKI_DIR.resolve():
+        try:
+            try:
+                from scripts.build_factor_wiki import build_wiki
+            except Exception:
+                from build_factor_wiki import build_wiki
+
+            build_wiki()
+        except Exception:
+            pass
+
+    return {"status": "completed", "wiki_dir": str(wiki_dir), "count": len(rows)}
 
 
 if __name__ == "__main__":

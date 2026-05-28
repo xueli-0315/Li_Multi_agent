@@ -1,0 +1,1 @@
+def get_factor(): return 'ZSCORE(ZSCORE(ZSCORE(($close - $vwap) / ($high - $low + 1e-08 + 1e-08))) / ($high - $low + 1e-08 + 1e-08)) / (1 + (1 + ($high - $low + 1e-08)))'

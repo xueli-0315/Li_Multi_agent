@@ -21,6 +21,7 @@ from factor_runtime.evolution.models import (
     ModelParamGAResult,
     SubsetGAResult,
 )
+from factor_runtime.factor_library_audit import run_factor_library_audit
 from factor_runtime.factor_library_manager import FactorLibraryManager
 from infra import StructuredLogger
 
@@ -639,13 +640,15 @@ class EvolutionRunner:
             "wiki_updated": False,
             "llm_distilled": False,
             "distill_reason": "",
+            "factor_library_audit_summary": "",
+            "factor_library_audit_report": "",
         }
         try:
             from scripts.build_evolved_factor_wiki import build_evolved_factor_wiki
 
             build_result = build_evolved_factor_wiki(config.factor_library_path, config.wiki_dir)
             summary["wiki_updated"] = build_result.get("status") == "completed"
-            summary["wiki_index"] = build_result.get("index", "")
+            summary["wiki_dir"] = build_result.get("wiki_dir", "")
         except Exception as exc:
             summary["distill_reason"] = f"wiki_build_failed:{exc}"
             logger.warn(
@@ -657,35 +660,52 @@ class EvolutionRunner:
 
         if not config.enable_llm_screening:
             summary["distill_reason"] = summary["distill_reason"] or "llm_screening_disabled"
-            self._write_json(run_dir / "evolution_wiki_summary.json", summary)
-            return summary
-
-        if not os.getenv("OPENAI_API_KEY", "").strip():
+        elif not os.getenv("OPENAI_API_KEY", "").strip():
             summary["distill_reason"] = summary["distill_reason"] or "missing_openai_api_key"
-            self._write_json(run_dir / "evolution_wiki_summary.json", summary)
-            return summary
-
-        if failure_count <= 0 and not Path(config.lessons_path).exists():
+        elif failure_count <= 0 and not Path(config.lessons_path).exists():
             summary["distill_reason"] = summary["distill_reason"] or "no_failures_to_distill"
-            self._write_json(run_dir / "evolution_wiki_summary.json", summary)
-            return summary
+        else:
+            try:
+                from scripts.distill_evolution_knowledge import distill_evolution_knowledge
 
+                distill_evolution_knowledge()
+                summary["llm_distilled"] = True
+                summary["lessons_path"] = str(config.lessons_path)
+                logger.info(
+                    "Evolution distilled lessons updated",
+                    category="evolution",
+                    phase="postprocess",
+                    payload={"lessons_path": str(config.lessons_path)},
+                )
+            except Exception as exc:
+                summary["distill_reason"] = summary["distill_reason"] or f"distill_failed:{exc}"
+                logger.warn(
+                    "Evolution knowledge distillation failed",
+                    category="evolution",
+                    phase="postprocess",
+                    payload={"reason": str(exc)},
+                )
         try:
-            from scripts.distill_evolution_knowledge import distill_evolution_knowledge
-
-            distill_evolution_knowledge()
-            summary["llm_distilled"] = True
-            summary["lessons_path"] = str(config.lessons_path)
+            audit_result = run_factor_library_audit(mode="report")
+            summary_path, report_path = audit_result.write_to(
+                run_dir,
+                summary_name="factor_library_audit_summary.json",
+                report_name="factor_library_audit_report.md",
+            )
+            summary["factor_library_audit_summary"] = str(summary_path)
+            summary["factor_library_audit_report"] = str(report_path)
             logger.info(
-                "Evolution distilled lessons updated",
+                "Factor library audit completed",
                 category="evolution",
                 phase="postprocess",
-                payload={"lessons_path": str(config.lessons_path)},
+                payload={
+                    "summary_path": str(summary_path),
+                    "report_path": str(report_path),
+                },
             )
         except Exception as exc:
-            summary["distill_reason"] = summary["distill_reason"] or f"distill_failed:{exc}"
             logger.warn(
-                "Evolution knowledge distillation failed",
+                "Factor library audit failed",
                 category="evolution",
                 phase="postprocess",
                 payload={"reason": str(exc)},

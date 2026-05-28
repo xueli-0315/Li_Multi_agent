@@ -4,11 +4,11 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import re
 
 import yaml
 
 from adapters.data_interface import DataBundle, UnifiedMarketDataAdapter, infer_time_step
+from factor_runtime.knowledge_store import load_for_mining
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -176,122 +176,6 @@ class CrossSectionDomainAdapter:
                 continue
         return sorted(rejected_factors.values(), key=lambda item: item.get("timestamp", ""), reverse=True)[:50]
 
-    @staticmethod
-    def _read_text_excerpt(path: Path, *, max_chars: int = 2500, max_lines: int = 24) -> str:
-        if not path.exists():
-            return ""
-        try:
-            text = path.read_text(encoding="utf-8")
-        except Exception:
-            return ""
-        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
-        if not lines:
-            return ""
-        excerpt = "\n".join(lines[:max_lines]).strip()
-        if len(excerpt) > max_chars:
-            excerpt = excerpt[:max_chars].rstrip() + "..."
-        return excerpt
-
-    @staticmethod
-    def _extract_markdown_table_rows(text: str, *, max_rows: int = 8) -> list[str]:
-        rows: list[str] = []
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if not line.startswith("|") or line.count("|") < 3:
-                continue
-            normalized = re.sub(r"\s+", " ", line)
-            if set(normalized.replace("|", "").replace(" ", "")) <= {"-", ":"}:
-                continue
-            if normalized.lower().startswith("| 因子名称 |") or normalized.lower().startswith("| 因子 |"):
-                continue
-            rows.append(line)
-            if len(rows) >= max_rows:
-                break
-        return rows
-
-    def _load_success_factor_memory(self) -> str:
-        sections: list[str] = []
-
-        wiki_index = PROJECT_ROOT / "factor_library" / "wiki" / "index.md"
-        wiki_log = PROJECT_ROOT / "factor_library" / "wiki" / "log.md"
-        wiki_index_text = self._read_text_excerpt(wiki_index, max_chars=5000, max_lines=40)
-        wiki_log_text = self._read_text_excerpt(wiki_log, max_chars=2500, max_lines=18)
-
-        if wiki_index_text:
-            rows = self._extract_markdown_table_rows(wiki_index_text, max_rows=8)
-            if rows:
-                sections.append("Mining success wiki (top factors):\n" + "\n".join(rows))
-        if wiki_log_text:
-            sections.append("Mining discovery log:\n" + wiki_log_text)
-
-        all_factor_library = PROJECT_ROOT / "factor_library" / "raw" / "all_factors_library.json"
-        if all_factor_library.exists():
-            try:
-                loaded = json.loads(all_factor_library.read_text(encoding="utf-8"))
-                records = loaded.get("records", []) if isinstance(loaded, dict) else []
-                if isinstance(records, list) and records:
-                    top_records = records[:8]
-                    summary_lines = []
-                    for item in top_records:
-                        if not isinstance(item, dict):
-                            continue
-                        name = str(item.get("factor_name", "unknown_factor"))
-                        expr = str(item.get("factor_expression", "")).strip()
-                        metrics = item.get("metrics", {}) if isinstance(item.get("metrics", {}), dict) else {}
-                        sharpe = metrics.get("sharpe", metrics.get("information_ratio", metrics.get("ICIR", "")))
-                        summary_lines.append(f"- {name} | sharpe={sharpe} | expr={expr[:120]}")
-                    if summary_lines:
-                        sections.append("Accepted factor library snapshot:\n" + "\n".join(summary_lines))
-            except Exception:
-                pass
-
-        return "\n\n".join(section for section in sections if section.strip())
-
-    def _load_evolution_success_memory(self) -> str:
-        index_path = PROJECT_ROOT / "factor_library" / "wiki" / "evolved_factors" / "index.md"
-        index_text = self._read_text_excerpt(index_path, max_chars=5000, max_lines=50)
-        if not index_text:
-            return ""
-        rows = self._extract_markdown_table_rows(index_text, max_rows=10)
-        if rows:
-            return "Evolution success wiki (top evolved factors):\n" + "\n".join(rows)
-        return index_text
-
-    def _load_evolution_failure_memory(self) -> str:
-        failures_path = PROJECT_ROOT / "factor_library" / "raw" / "evolved" / "evolution_failures.jsonl"
-        if not failures_path.exists():
-            return ""
-        try:
-            records: list[dict[str, Any]] = []
-            for line in failures_path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    item = json.loads(line)
-                except Exception:
-                    continue
-                if isinstance(item, dict):
-                    records.append(item)
-            if not records:
-                return ""
-            recent = records[-20:]
-            lines: list[str] = []
-            for item in recent:
-                name = str(item.get("name", "unknown_factor"))
-                reason = str(item.get("reason", ""))
-                expr = str(item.get("expression", ""))
-                parents = item.get("parents", [])
-                parent_text = ", ".join(str(p) for p in parents) if isinstance(parents, list) else str(parents)
-                lines.append(f"- {name} | reason={reason[:160]} | expr={expr[:120]} | parents={parent_text}")
-            return "Evolution failure memory:\n" + "\n".join(lines)
-        except Exception:
-            return ""
-
-    def _load_evolution_distilled_knowledge(self) -> str:
-        lessons_path = PROJECT_ROOT / "factor_library" / "raw" / "evolved" / "distilled_lessons_evolution.md"
-        return self._read_text_excerpt(lessons_path, max_chars=4000, max_lines=30)
-
     def build_initial_payload(self) -> dict[str, object]:
         bundle = self.load_data_bundle()
         summary = self.summarize_panel_data()
@@ -303,17 +187,12 @@ class CrossSectionDomainAdapter:
             if col in summary["feature_columns"] and col not in available_features:
                 available_features.append(col)
 
-        distilled_knowledge = ""
-        lessons_file = PROJECT_ROOT / "factor_library" / "raw" / "negative_knowledge" / "distilled_lessons.md"
-        if lessons_file.exists():
-            try:
-                distilled_knowledge = lessons_file.read_text(encoding="utf-8")
-            except Exception:
-                distilled_knowledge = ""
-        evolution_distilled_knowledge = self._load_evolution_distilled_knowledge()
-        success_factor_memory = self._load_success_factor_memory()
-        evolution_success_factor_memory = self._load_evolution_success_memory()
-        evolution_failure_memory = self._load_evolution_failure_memory()
+        knowledge_snapshot = load_for_mining()
+        distilled_knowledge = knowledge_snapshot.distilled_knowledge
+        evolution_distilled_knowledge = knowledge_snapshot.evolution_distilled_knowledge
+        success_factor_memory = knowledge_snapshot.success_factor_memory
+        evolution_success_factor_memory = knowledge_snapshot.evolution_success_factor_memory
+        evolution_failure_memory = knowledge_snapshot.evolution_failure_memory
         rejected_factors = self._load_all_rejected_factors()
         rag_text = (
             f"{self.market_type} panel rows={summary['rows']}, symbols={summary['symbol_count']}, "
@@ -351,6 +230,9 @@ class CrossSectionDomainAdapter:
             "evolution_success_factor_memory": evolution_success_factor_memory,
             "evolution_failure_memory": evolution_failure_memory,
             "long_term_memory": long_term_memory,
+            "knowledge_source_paths": dict(knowledge_snapshot.source_paths),
+            "knowledge_counts": dict(knowledge_snapshot.counts),
+            "knowledge_warnings": list(knowledge_snapshot.warnings),
             "rejected_factors": rejected_factors,
             "symbol_alias_map": dict(self.symbol_alias_map),
         }

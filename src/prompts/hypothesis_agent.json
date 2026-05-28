@@ -36,7 +36,7 @@
     "Distilled Knowledge from evolution failures: {{evolution_distilled_knowledge}}",
     "{% endif %}",
     "{% if evolution_success_factor_memory %}",
-    "Success Factor Memory from evolved factor wiki: {{evolution_success_factor_memory}}",
+    "Success Factor Memory from evolved factor library: {{evolution_success_factor_memory}}",
     "{% endif %}",
     "{% if evolution_failure_memory %}",
     "Failure Memory from evolution runs: {{evolution_failure_memory}}",

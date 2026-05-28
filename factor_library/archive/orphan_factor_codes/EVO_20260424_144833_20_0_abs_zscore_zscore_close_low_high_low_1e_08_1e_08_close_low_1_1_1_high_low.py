@@ -1,0 +1,1 @@
+def get_factor(): return 'ABS(ZSCORE(ZSCORE($close * $low / ($high - $low + 1e-08 + 1e-08))) * ($close - $low)) / (1 + (1 + (1 + ($high - $low))))'

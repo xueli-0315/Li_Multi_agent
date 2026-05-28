@@ -1,83 +1,49 @@
-import json
-import os
-from pathlib import Path
-from datetime import datetime
+from __future__ import annotations
 
-# Paths
+import json
+import shutil
+from pathlib import Path
+
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FAILURES_FILE = PROJECT_ROOT / "factor_library" / "raw" / "negative_knowledge" / "all_failures.jsonl"
-WIKI_DIR = PROJECT_ROOT / "factor_library" / "wiki"
-FAILURES_WIKI_DIR = WIKI_DIR / "failures"
+LESSONS_FILE = PROJECT_ROOT / "factor_library" / "raw" / "negative_knowledge" / "distilled_lessons.md"
+FAILURES_WIKI_DIR = PROJECT_ROOT / "factor_library" / "wiki" / "failures"
 
-def generate_failure_wiki():
-    """将 all_failures.jsonl 中的每个记录转换为 Wiki 页面"""
-    if not FAILURES_FILE.exists():
-        print("No failures file found.")
-        return
 
-    FAILURES_WIKI_DIR.mkdir(parents=True, exist_ok=True)
-    
-    failures = []
-    with open(FAILURES_FILE, "r") as f:
-        for line in f:
+def _count_jsonl(path: Path) -> int:
+    if not path.exists():
+        return 0
+    count = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
             try:
-                failures.append(json.loads(line))
-            except: continue
+                json.loads(line)
+            except Exception:
+                continue
+            count += 1
+    return count
 
-    # 按时间倒序排列
-    failures.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
 
-    for i, fail in enumerate(failures):
-        name = fail.get('name', 'Unknown_Factor').replace("/", "_")
-        run_id = fail.get('run_id', 'unknown')
-        timestamp = fail.get('timestamp', 'unknown')
-        fail_type = fail.get('type', 'unknown')
-        
-        # 文件名：日期_RunID_索引_名称.md
-        safe_name = f"{timestamp[:10].replace('-', '')}_{run_id}_{i}_{name}.md"
-        file_path = FAILURES_WIKI_DIR / safe_name
-        
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(f"# Failure Report: {name}\n\n")
-            f.write(f"## Metadata\n")
-            f.write(f"- **Timestamp:** {timestamp}\n")
-            f.write(f"- **Run ID:** `{run_id}`\n")
-            f.write(f"- **Failure Type:** `{fail_type}`\n\n")
-            
-            f.write(f"## Reason for Rejection\n")
-            f.write(f"> {fail.get('reason', 'No reason provided.')}\n\n")
-            
-            if fail.get('metrics'):
-                f.write(f"## Performance Metrics\n")
-                f.write("```json\n")
-                f.write(json.dumps(fail['metrics'], indent=4))
-                f.write("\n```\n\n")
-            
-            if fail.get('expression'):
-                f.write(f"## Factor Expression\n")
-                f.write(f"```python\n{fail['expression']}\n```\n\n")
+def refresh_negative_knowledge_view() -> dict[str, object]:
+    """Keep negative knowledge in raw/distilled files and remove legacy failure wiki pages."""
+    removed_failure_wiki = False
+    if FAILURES_WIKI_DIR.exists():
+        shutil.rmtree(FAILURES_WIKI_DIR)
+        removed_failure_wiki = True
 
-    # 更新索引文件 (Negative Index)
-    update_index(failures)
+    return {
+        "failure_records": _count_jsonl(FAILURES_FILE),
+        "failures_file": str(FAILURES_FILE),
+        "distilled_lessons_exists": LESSONS_FILE.exists(),
+        "distilled_lessons_file": str(LESSONS_FILE),
+        "removed_failure_wiki": removed_failure_wiki,
+        "failure_wiki_dir": str(FAILURES_WIKI_DIR),
+    }
 
-def update_index(failures):
-    index_path = FAILURES_WIKI_DIR / "index.md"
-    with open(index_path, "w", encoding="utf-8") as f:
-        f.write("# Negative Knowledge Base (Failure Index)\n\n")
-        f.write("This section tracks all factor candidates that failed the quality gate or execution process.\n\n")
-        f.write("| Date | RunID | Factor Name | Type | Reason |\n")
-        f.write("|------|-------|-------------|------|--------|\n")
-        
-        for i, fail in enumerate(failures[:200]): # 索引只展示最近 200 条
-            name = fail.get('name', 'Unknown')
-            run_id = fail.get('run_id', 'unknown')
-            timestamp = fail.get('timestamp', 'unknown')[:10]
-            fail_type = fail.get('type', 'unknown')
-            reason = fail.get('reason', 'N/A').split('\n')[0][:50] + "..."
-            
-            # 对应的文件名链接
-            safe_name = f"{timestamp.replace('-', '')}_{run_id}_{i}_{name.replace('/', '_')}.md"
-            f.write(f"| {timestamp} | {run_id} | [{name}]({safe_name}) | {fail_type} | {reason} |\n")
 
 if __name__ == "__main__":
-    generate_failure_wiki()
+    summary = refresh_negative_knowledge_view()
+    print(json.dumps(summary, ensure_ascii=False, indent=2))

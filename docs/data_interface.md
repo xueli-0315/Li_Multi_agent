@@ -11,11 +11,14 @@
 1. 把结构化市场数据统一成项目内部可执行的 panel
 2. 把本地市场文本整理成可以和 panel 对齐的文本特征
 
+它不负责读取 `factor_library/wiki/` 或因子长期记忆；那些知识由 `knowledge_store` 单独注入到 `mining` / `evolution` 的上下文里。
+
 简化理解：
 
 - `panel_data.parquet` 是主数据
 - `--text-data-path` 是辅助文本输入
 - `mining` 会拿到合并后的 `data_bundle`
+- `mining` 的完整初始 payload = `data_bundle` + panel 摘要 + 统一知识入口输出
 - `evolution` 和 `batch-backtest` 继续只看结构化 panel 和因子库
 
 ---
