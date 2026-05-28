@@ -1,12 +1,58 @@
 # 多智能体因子挖掘平台
 
+| 维度         | 当前状态                                                  |
+| ------------ | --------------------------------------------------------- |
+| 核心工作流   | `mining` / `evolution` / `batch-backtest` 已打通    |
+| 多市场支持   | `crypto` / `stock` / `futures`                      |
+| 非结构化报告 | 本地报告入库与事件结构化已接入                            |
+| 长期记忆     | `factor_library` 统一供 `mining` / `evolution` 使用 |
+| 部署入口     | 本地 `pip install -e .` / Docker 启动                   |
+
+<table>
+  <tr>
+    <td width="25%" valign="top">
+      <strong>🚀 mining</strong><br/>
+      假设生成、实验设计、表达式校验、回测反馈闭环。<br/><br/>
+      <code>LLM 参与最深</code>
+    </td>
+    <td width="25%" valign="top">
+      <strong>⚙️ evolution</strong><br/>
+      表达式进化、子集组合、模型参数优化。<br/><br/>
+      <code>确定性 GA 主导</code>
+    </td>
+    <td width="25%" valign="top">
+      <strong>🧪 batch-backtest</strong><br/>
+      读取主因子库，集中筛选、训练与最终评估。<br/><br/>
+      <code>结果交付入口</code>
+    </td>
+    <td width="25%" valign="top">
+      <strong>📚 reports</strong><br/>
+      本地报告读取、chunk 分析、事件结构化与日志沉淀。<br/><br/>
+      <code>给 mining 增强输入</code>
+    </td>
+  </tr>
+</table>
+
 这是一个把 **LLM 智能体协作** 和 **确定性量化研究层** 拆开实现的因子挖掘项目。
 
 LLM 负责提出假设、设计因子、验证表达式、调用回测、压缩反馈；确定性代码负责因子计算、预处理、筛选、模型评估、批量回测和结果沉淀。项目已经支持 `crypto / stock / futures` 三类市场，并加入了本地非结构化报告入库能力。
 
 ---
 
-## 1. 项目简介
+## 快速导航
+
+- [✨ 1. 项目简介](#1-项目简介)
+- [🧭 2. 三个运行模式 + 非结构化报告提取](#2-三个运行模式--非结构化报告提取)
+- [⚡ 3. 快速开始](#3-快速开始)
+- [🏗️ 4. 项目架构](#4-项目架构)
+- [🧮 5. 数据格式与表达式](#5-数据格式与表达式)
+- [🛠️ 6. 开发与验证](#6-开发与验证)
+- [📚 7. 深入阅读](#7-深入阅读)
+- [🗺️ 8. 待完成事项](#8-待完成事项)
+
+---
+
+## 1. ✨ 项目简介
 
 项目目标是围绕 `data/panel_data.parquet` 构建一个可持续迭代的因子研究闭环：
 
@@ -25,13 +71,14 @@ LLM 负责提出假设、设计因子、验证表达式、调用回测、压缩�
 
 ---
 
-## 2. 三个运行模式 + 非结构化报告提取
+## 2. 🧭 三个运行模式 + 非结构化报告提取
 
 ### 2.1 🚀 `mining`
 
 这是主工作流，也是 LLM 参与最深的模式。
 
 **输入**
+
 - `data/panel_data.parquet`
 - 可选市场文本：`--text-data-path`
 - 可选市场类型：`--market-type crypto|stock|futures`
@@ -49,6 +96,7 @@ flowchart LR
 ```
 
 **输出**
+
 - `logs/alpha_factor_mining_loop/<run_id>/`
 - `factor_library/` 里的沉淀因子
 - `artifacts/trajectory_pool.json`
@@ -59,6 +107,7 @@ flowchart LR
 这是纯确定性的因子优化模式，主要做遗传优化。
 
 **输入**
+
 - `data/panel_data.parquet`
 - 因子库
 - 可选 GA 参数：`--evolve-target factor|model_params`
@@ -75,6 +124,7 @@ flowchart LR
 ```
 
 **输出**
+
 - `logs/evolution_loop/EVO_*/`
 - `factor_library/raw/mutated_factors_library.json`
 - `factor_library/wiki/evolved_factors/`
@@ -85,6 +135,7 @@ flowchart LR
 这是最终验证模式，负责把已筛选的因子或因子组合放到更重的评估流程里。
 
 **输入**
+
 - 结构化 panel
 - 已沉淀的因子库
 - 可选阈值：`--min-factors`, `--ic-threshold`, `--icir-threshold`
@@ -101,10 +152,12 @@ flowchart LR
 ```
 
 **输出**
+
 - `results/batch_backtest/BATCH_*/`
 - `logs/batch_backtest/BATCH_*/`
 
 **补充说明**
+
 - `results/` 是主结果目录，面向人直接看回测结论、预测和图表
 - `mlruns/` 如果在你的本地环境里被 MLflow 或兼容组件启用，会作为更底层的实验追踪目录出现
 - 本仓库当前代码不直接把 `mlruns/` 当作主输出管理；它更像辅助检查层，而不是 `batch-backtest` 的核心交付物
@@ -121,6 +174,7 @@ mlflow ui --backend-store-uri file:./mlruns
 这个流程不是新的运行模式，而是给 `mining` 提供更好的输入来源。
 
 **输入**
+
 - `data/unstructured/reports/` 下的 PDF / DOCX / HTML / TXT / MD
 
 **过程**
@@ -136,6 +190,7 @@ flowchart LR
 ```
 
 **输出**
+
 - `data/unstructured/auto_market_text.jsonl`
 - `data/unstructured/report_summaries/`
 - `logs/report_ingestion/RPT_*/`
@@ -147,6 +202,7 @@ flowchart LR
 这里的 “LLM wiki” 不是单个文件，而是一套统一知识入口。`mining` 和 `evolution` 都会通过同一个 `knowledge_store` 读取长期记忆，只是进入工作流后的作用不同。
 
 **`mining` 的记忆**
+
 - 短期记忆：
   当前 run 的共享上下文、每轮 `feedback`、`next_hypothesis_hint`、`hypothesis_feedback_history`
   每 5 轮还会把失败样本进一步蒸馏，推动短期反馈向长期经验迁移
@@ -160,11 +216,13 @@ flowchart LR
   `factor_library/raw/evolved/distilled_lessons_evolution.md`
 
 **`evolution` 的记忆**
+
 - 没有 `mining` 那种逐轮对话式短期记忆
 - 但启动前会加载一份 memory snapshot，来源和 `mining` 基本相同
 - 这份 snapshot 会影响 seed 优先级、失败惩罚、候选排序，但不会改变 GA 主循环的确定性
 
 **知识和经验怎么积累**
+
 - 成功因子会持续进入 `all_factors_library.json` 和 `mutated_factors_library.json`
 - mining 失败经验会沉淀到 `distilled_lessons.md`
 - evolution 失败经验会沉淀到 `evolution_failures.jsonl` 与 `distilled_lessons_evolution.md`
@@ -172,6 +230,7 @@ flowchart LR
 - 随着时间沉淀，LLM 会更少重复试错，更快避开坏模式，也更容易沿着历史上有效的结构继续搜索
 
 **`batch-backtest` 的输入**
+
 - 默认只读取结构化 panel 与两个主因子库：
   `factor_library/raw/all_factors_library.json`
   `factor_library/raw/mutated_factors_library.json`
@@ -179,7 +238,7 @@ flowchart LR
 
 ---
 
-## 3. 快速开始
+## 3. ⚡ 快速开始
 
 如果你想尽量少装本地依赖，先走 Docker 会更省心：
 
@@ -210,11 +269,11 @@ ZHIPU_MODEL=glm-4-flash
 
 常见 provider：
 
-| Provider | 必需变量 | 常用可选变量 |
-| --- | --- | --- |
-| `zhipu` | `ZHIPU_API_KEY` | `ZHIPU_MODEL`, `LLM_MODEL` |
-| `azure_openai` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION` | `AZURE_OPENAI_DEPLOYMENT`, `LLM_MODEL` |
-| `openai-compatible` | `OPENAI_API_KEY`, `LLM_MODEL` | `OPENAI_BASE_URL` |
+| Provider              | 必需变量                                                                          | 常用可选变量                               |
+| --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------ |
+| `zhipu`             | `ZHIPU_API_KEY`                                                                 | `ZHIPU_MODEL`, `LLM_MODEL`             |
+| `azure_openai`      | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION` | `AZURE_OPENAI_DEPLOYMENT`, `LLM_MODEL` |
+| `openai-compatible` | `OPENAI_API_KEY`, `LLM_MODEL`                                                 | `OPENAI_BASE_URL`                        |
 
 `AGENT_MODEL_MAP` 可以是 JSON，对不同 agent 指定不同模型。
 
@@ -323,7 +382,7 @@ python3 scripts/ingest_unstructured_reports.py \
 
 ---
 
-## 4. 项目架构
+## 4. 🏗️ 项目架构
 
 ### 4.1 代码结构
 
@@ -358,20 +417,21 @@ python3 scripts/ingest_unstructured_reports.py \
 这个项目的核心分层是：
 
 1. **LLM / Agent 层**
+
    - 提出方向
    - 拆解任务
    - 生成候选因子
    - 解释结果和反馈
-
 2. **确定性研究层**
+
    - 表达式解析
    - 因子计算
    - 预处理
    - 指标筛选
    - GA 进化
    - 批量验证
-
 3. **数据与资产层**
+
    - `data/panel_data.parquet`
    - `data/unstructured/auto_market_text.jsonl`
    - `factor_library/`
@@ -400,7 +460,7 @@ raw reports
 
 ---
 
-## 5. 数据格式与表达式
+## 5. 🧮 数据格式与表达式
 
 ### 5.1 Panel 数据
 
@@ -451,7 +511,7 @@ data/panel_data.parquet
 
 ---
 
-## 6. 开发与验证
+## 6. 🛠️ 开发与验证
 
 常用测试：
 
@@ -475,7 +535,7 @@ python3 scripts/test_validator.py
 
 ---
 
-## 7. 深入阅读
+## 7. 📚 深入阅读
 
 - `docs/data_interface.md`
 - `docs/mode_mining.md`
@@ -484,11 +544,13 @@ python3 scripts/test_validator.py
 
 ---
 
-## 8. 待完成事项
+## 8. 🗺️ 待完成事项
 
-- 放入更多平台与标的接口，例如 `Tushare`、`AkShare`、`BaoStock`、`MySQL`，并逐步扩展到股票、期货等市场。
-- 让 LLM 能定时读取 `data/unstructured/reports/`，自动分析报告并持续转化为结构化数据。
-- 增加更多 LLM 选择，并按 agent 职责分层配置：复杂规划类 agent 用更强模型，重复任务多的 agent 用更便宜模型。
-- 增加可视化面板，把所有 mode 与未来功能的输入、输出、日志、结果整理成不会看代码的用户也能直接操作的界面。
-- 优化 `mining` mode 的 agents，并为 `evolution` 与 `batch-backtest` 增加更多可选 agent 协作能力，同时继续优化非结构数据转化 agent。
-- 继续提升非结构数据转化 agent 的丰富性，让它能处理更多报告类型、证据粒度与事件抽取场景。
+| 状态        | 方向                                                       | 说明                                                                                                      |
+| ----------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 🟡 规划中   | 更多数据平台与标的接口                                     | 接入 `Tushare`、`AkShare`、`BaoStock`、`MySQL` 等来源，并继续扩展股票、期货等市场。               |
+| 🟡 部分完成 | 报告定时分析与结构化                                       | 已支持本地非结构化报告入库，下一步是让 LLM 定时读取 `data/unstructured/reports/` 并持续转成结构化数据。 |
+| 🟡 部分完成 | 更多 LLM 选择与分层调度                                    | 当前已经支持多 provider 与 `AGENT_MODEL_MAP`，后续会继续细化为“强模型做规划、轻模型做高频重复任务”。  |
+| ⚪ 待启动   | 可视化面板                                                 | 为所有 mode 和未来功能提供统一界面，让不会看代码的用户也能直接使用输入、输出、日志和结果。                |
+| 🟡 持续迭代 | 优化 `mining` / 增强 `evolution` 与 `batch-backtest` | 继续优化 `mining` mode agents，并为 `evolution` / `batch-backtest` 增加更多可选 agent 协作能力。    |
+| 🟡 持续迭代 | 丰富非结构化数据转化 agent                                 | 提升报告阅读、证据提取、事件归纳和多文档理解能力，覆盖更多报告类型与抽取场景。                            |
