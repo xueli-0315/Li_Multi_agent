@@ -177,8 +177,10 @@ class EvolutionGATests(unittest.TestCase):
             self.assertTrue((result.run_dir / "best_factors.txt").exists())
             self.assertTrue((result.run_dir / "accepted_factors.json").exists())
             self.assertTrue((result.run_dir / "evolution_wiki_summary.json").exists())
+            self.assertTrue((result.run_dir / "factor_library_audit_summary.json").exists())
+            self.assertTrue((result.run_dir / "factor_library_audit_report.md").exists())
             self.assertFalse((result.run_dir / "final_audit").exists())
-            self.assertTrue((wiki_dir / "index.md").exists())
+            self.assertFalse((wiki_dir / "index.md").exists())
             progress_lines = (result.run_dir / "progress.jsonl").read_text(encoding="utf-8").splitlines()
             self.assertTrue(any('"stage": "generation_snapshot"' in line for line in progress_lines))
             self.assertTrue(any('"stage": "candidate_evaluated"' in line for line in progress_lines))
@@ -252,8 +254,10 @@ class EvolutionGATests(unittest.TestCase):
             wiki_root = root / "factor_library" / "wiki"
             evolved_wiki_dir = wiki_root / "evolved_factors"
             evolved_dir = root / "factor_library" / "raw" / "evolved"
+            raw_root = root / "factor_library" / "raw"
             evolved_wiki_dir.mkdir(parents=True, exist_ok=True)
             evolved_dir.mkdir(parents=True, exist_ok=True)
+            raw_root.mkdir(parents=True, exist_ok=True)
 
             (wiki_root / "log.md").write_text(
                 "\n".join(
@@ -267,16 +271,29 @@ class EvolutionGATests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            (evolved_wiki_dir / "index.md").write_text(
-                "\n".join(
-                    [
-                        "# Evolved Factors Index",
-                        "",
-                        "| [Recent_Success](./EVO_20260527/recent_success.md) | EVO_20260527 | 1 | N/A | N/A | 0.1234 | 0.98 |",
-                        "| [Other_Success](./EVO_20260527/other_success.md) | EVO_20260527 | 1 | N/A | N/A | 0.0567 | 0.95 |",
-                    ]
-                )
-                + "\n",
+            (raw_root / "mutated_factors_library.json").write_text(
+                """
+{
+  "records": [
+    {
+      "run_id": "EVO_20260527",
+      "loop_round": 1,
+      "intra_loop_index": 1,
+      "factor_name": "Recent_Success",
+      "factor_expression": "$predictive",
+      "metrics": {"Rank IC": 0.1234, "coverage": 0.98}
+    },
+    {
+      "run_id": "EVO_20260527",
+      "loop_round": 1,
+      "intra_loop_index": 2,
+      "factor_name": "Other_Success",
+      "factor_expression": "$inverse",
+      "metrics": {"Rank IC": 0.0567, "coverage": 0.95}
+    }
+  ]
+}
+""".strip(),
                 encoding="utf-8",
             )
             (evolved_dir / "evolution_failures.jsonl").write_text(
@@ -297,6 +314,7 @@ class EvolutionGATests(unittest.TestCase):
             config = EvolutionConfig(
                 panel_data_path=root / "panel.parquet",
                 seed_library_path=root / "seed_library.json",
+                factor_library_path=root / "factor_library" / "raw" / "mutated_factors_library.json",
                 log_root=root / "logs",
                 evolved_dir=evolved_dir,
                 wiki_dir=evolved_wiki_dir,

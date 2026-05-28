@@ -226,58 +226,85 @@ flowchart LR
 
 ---
 
-## 5. LLM wiki 是什么
+## 5. LLM wiki / 长期记忆输入
 
-这里的“LLM wiki”不是单个文件，而是一组会被循环更新的知识门户。它的作用是把因子研究中的“经验”沉淀成可浏览、可回看、可复用的结构化知识。
+这里的“LLM wiki”不是单个文件，而是一组由统一知识入口整理出来的长期记忆。`mining` 不是把整棵 `factor_library/wiki/` 全量塞给 agent，而是把成功经验、失败经验和最近演化教训压缩后送进初始 payload。
 
-### 5.1 主要组成
+### 5.1 长期记忆实际来自哪些文件
 
-- `factor_library/wiki/index.md`：因子库首页
-- `factor_library/wiki/log.md`：最近发现流水账
-- `factor_library/wiki/factors/`：每个因子的详情页
-- `factor_library/wiki/hypotheses/`：假设分类页
-- `factor_library/wiki/failures/`：失败知识页
-- `factor_library/wiki/evolved_factors/`：演化因子门户
+当前 `mining` 通过 `knowledge_store.load_for_mining()` 读取这些来源：
 
-### 5.2 它怎么接入 HypothesisAgent
+- `factor_library/raw/negative_knowledge/distilled_lessons.md`
+- `factor_library/wiki/index.md`
+- `factor_library/wiki/log.md`
+- `factor_library/raw/all_factors_library.json`
+- `factor_library/raw/mutated_factors_library.json`
+- `factor_library/raw/evolved/evolution_failures.jsonl`
+- `factor_library/raw/evolved/distilled_lessons_evolution.md`
 
-`HypothesisAgentV2` 当前不会直接把整棵 wiki 树完整塞进 prompt。它读取的是两个长期记忆入口：
+其中：
 
-- `rag_text`
+- `index.md` / `log.md` 提供成功因子的目录和最近发现
+- `all_factors_library.json` 提供主成功因子库快照
+- `mutated_factors_library.json` 提供演化成功因子快照
+- `distilled_lessons.md` 提供 mining 侧失败经验摘要
+- `evolution_failures.jsonl` + `distilled_lessons_evolution.md` 提供 evolution 侧最近失败样本和压缩教训
+
+### 5.2 它怎么进入 HypothesisAgent
+
+`HypothesisAgentV2` 看到的不是“wiki 文件列表”，而是 `CrossSectionDomainAdapter.build_initial_payload()` 组装好的结构化上下文。
+
+当前会进入初始 payload 的长期记忆字段包括：
+
 - `distilled_knowledge`
+- `evolution_distilled_knowledge`
+- `success_factor_memory`
+- `evolution_success_factor_memory`
+- `evolution_failure_memory`
+- `long_term_memory`
+- `knowledge_source_paths`
+- `knowledge_counts`
+- `knowledge_warnings`
 
-它们的来源分别是：
+此外还会一起进入：
 
-1. **`rag_text`**
-   - 由 `CrossSectionDomainAdapter.build_initial_payload()` 生成
-   - 本质是当前 panel 的摘要：市场类型、样本范围、时间步长、特征概览、目标列
-   - 作用是给 `HypothesisAgentV2` 一个“我现在站在什么数据场景里”的背景记忆
+- `rag_text`：当前 panel 场景摘要
+- `available_features`：当前可用结构化特征
+- `hypothesis_feedback_history`：最近几轮的短期反馈轨迹
+- `rejected_factors`：近期被拒绝因子的失败原因
 
-2. **`distilled_knowledge`**
-   - 由 `factor_library/raw/negative_knowledge/distilled_lessons.md` 读取
-   - 由 `distill_negative_knowledge.py` 从失败样本中持续提炼
-   - 作用是给 `HypothesisAgentV2` 一个“哪些套路已经失败过”的长期记忆
+所以可以把 `mining` 的记忆理解成两层：
 
-此外，`hypothesis_feedback_history` 也会被一起送入，这样 agent 可以看到最近几轮的研究轨迹。
+- 短期记忆：
+  当前 run 中每一轮的 `feedback`、`next_hypothesis_hint`、`hypothesis_feedback_history`
+  每 5 轮还会做一次更强的失败经验蒸馏，把重复出现的问题压回长期知识
+- 长期记忆：
+  `knowledge_store` 从 `factor_library/raw/*` 和 `factor_library/wiki/*` 提取出来的成功经验、失败经验和演化经验
 
-### 5.3 wiki 是怎么变成长久记忆的
+### 5.3 这些知识怎么变成长久记忆
 
-`factor_library/wiki/` 本身是可浏览的知识门户。它先由后处理脚本生成，再通过更轻的输入字段进入 agent：
+`factor_library/wiki/` 本身是可浏览的知识门户，但真正喂给 agent 的，是统一知识入口压缩后的字段：
 
 ```mermaid
 flowchart LR
-  A["成功因子 / 失败因子 / 反馈"] --> B["写入 factor_library/raw/*"]
-  B --> C["构建 wiki 页面"]
-  C --> D["生成 distilled_knowledge / rag_text"]
-  D --> E["HypothesisAgentV2 输入"]
+  A["成功因子 / 失败因子 / 演化结果"] --> B["写入 factor_library/raw/*"]
+  B --> C["刷新 wiki/index.md 与 wiki/log.md"]
+  B --> D["提炼 distilled_lessons.md"]
+  B --> E["提炼 distilled_lessons_evolution.md"]
+  C --> F["knowledge_store"]
+  D --> F
+  E --> F
+  F --> G["mining initial payload"]
+  G --> H["HypothesisAgentV2 输入"]
 ```
 
-当前链路里，wiki 的“长期记忆”主要体现在：
+当前链路里，长期记忆主要体现在：
 
-- `factor_library/wiki/log.md` 记录最近发现
-- `factor_library/wiki/factors/` 和 `factor_library/wiki/hypotheses/` 保存可回看的结构化知识
-- `factor_library/wiki/failures/` 作为失败知识库
-- `distilled_knowledge` 把失败教训压缩后回灌到下一轮 hypothesis
+- 成功经验会不断进入 `all_factors_library.json`
+- 演化成功经验会不断进入 `mutated_factors_library.json`
+- mining 失败经验会沉淀到 `distilled_lessons.md`
+- evolution 失败经验会沉淀到 `evolution_failures.jsonl` 和 `distilled_lessons_evolution.md`
+- `wiki/index.md` 与 `wiki/log.md` 会把主成功因子和演化因子统一整理成可读门户
 
 ### 5.4 它怎么更新
 
@@ -285,21 +312,24 @@ flowchart LR
 
 1. **成功知识**
    - 合格因子会写入 `factor_library/raw/all_factors_library.json`
-   - 同步生成 factor wiki 页面
+   - 同步刷新 `factor_library/wiki/index.md`、`factor_library/wiki/log.md` 与 `factor_library/wiki/factors/`
 2. **失败知识**
    - 失败样本会写入负面知识库
-   - 由 `distill_negative_knowledge.py` / `build_negative_wiki.py` 汇总成 wiki 页面
+   - 由 `distill_negative_knowledge.py` 汇总成 `distilled_lessons.md`
+   - 不再维护 `wiki/failures/` 这种大目录，失败经验主要保留在 `all_failures.jsonl` 和 `distilled_lessons.md`
 
 ### 5.5 你该看什么
 
 - 想看最近发现了什么因子：看 `factor_library/wiki/log.md`
 - 想看某个因子背后的假设：看 `factor_library/wiki/hypotheses/`
 - 想看某个因子的公式和指标：看 `factor_library/wiki/factors/`
-- 想看哪些套路已经失败：看 `factor_library/wiki/failures/`
+- 想看完整失败记录：看 `factor_library/raw/negative_knowledge/all_failures.jsonl`
+- 想看 agent 实际会吸收的失败经验：看 `factor_library/raw/negative_knowledge/distilled_lessons.md`
+- 想看 agent 实际会吸收的演化教训：看 `factor_library/raw/evolved/distilled_lessons_evolution.md`
 
 ### 5.6 为什么要有 wiki
 
-因为只看日志太散，只看因子库又太静。wiki 的作用是把“发现过程”变成“知识目录”，让下次研究时能快速复用，而不是每次从头猜。
+因为只看日志太散，只看 JSON 因子库又太冷。wiki 的作用是把“发现过程”变成“知识目录”，再由 `knowledge_store` 把目录压缩成 agent 真正能用的长期记忆。
 
 ### 5.7 如果你想把 wiki 页面直接喂给 agent
 

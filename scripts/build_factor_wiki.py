@@ -8,15 +8,45 @@ import re
 SCRIPT_DIR = Path(__file__).resolve().parent
 BASE_DIR = SCRIPT_DIR.parent / "factor_library"
 RAW_JSON = BASE_DIR / "raw" / "all_factors_library.json"
+MUTATED_JSON = BASE_DIR / "raw" / "mutated_factors_library.json"
 WIKI_DIR = BASE_DIR / "wiki"
 FACTORS_DIR = WIKI_DIR / "factors"
 HYPOTHESES_DIR = WIKI_DIR / "hypotheses"
+EVOLVED_FACTORS_DIR = WIKI_DIR / "evolved_factors"
 
 def slugify(text):
     text = text.lower()
     text = re.sub(r'[^\w\s-]', '', text)
     text = re.sub(r'[\s_-]+', '_', text)
     return text.strip('_')[:50]
+
+
+def _load_records(path):
+    if not path.exists():
+        return []
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    records = data.get("records", []) if isinstance(data, dict) else []
+    return [item for item in records if isinstance(item, dict)] if isinstance(records, list) else []
+
+
+def _metric_value(record, *keys):
+    metrics = record.get("metrics", {})
+    if not isinstance(metrics, dict):
+        return 0
+    for key in keys:
+        value = metrics.get(key)
+        if isinstance(value, (int, float)):
+            return value
+    return 0
+
+
+def _evolved_file_name(record):
+    run_id = record.get("run_id", "legacy")
+    loop = record.get("loop_round", record.get("generation", 0))
+    idx = record.get("intra_loop_index", 0)
+    name = record.get("factor_name", "Unknown_Factor")
+    return f"{run_id}_L{loop}_I{idx}_{name}.md"
 
 def build_wiki():
     # Ensure dirs exist and are clean
@@ -34,10 +64,8 @@ def build_wiki():
         print(f"Error: {RAW_JSON} not found.")
         return
 
-    with open(RAW_JSON, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    records = data.get("records", [])
+    records = _load_records(RAW_JSON)
+    evolved_records = _load_records(MUTATED_JSON)
     
     # Group by hypothesis
     hypotheses_map = {} # hypothesis_text -> list of factors
@@ -143,6 +171,25 @@ ic: {metrics.get('IC', 0)}
         
         fname = factor_to_filename.get(f"{r.get('loop_round',0)}_{r.get('intra_loop_index',0)}_{r['factor_name']}")
         log_content += f"- **ingest** | 发现因子 [[{fname[:-3]}|{r['factor_name']}]] (L{r.get('loop_round',0)} I{r.get('intra_loop_index',0)}) | Sharpe: {r['metrics'].get('sharpe', 0):.4f}\n"
+
+    if evolved_records:
+        log_content += "\n## Evolution Accepted Factors\n"
+        evolved_sorted = sorted(
+            evolved_records,
+            key=lambda x: (x.get('run_id', ''), x.get('loop_round', x.get('generation', 0)), x.get('intra_loop_index', 0)),
+        )
+        current_run = ""
+        for r in evolved_sorted:
+            run = r.get('run_id', 'legacy')
+            if run != current_run:
+                log_content += f"\n### Run: {run}\n"
+                current_run = run
+            fname = _evolved_file_name(r)
+            rank_ic = _metric_value(r, "Rank IC", "rank_ic")
+            log_content += (
+                f"- **evolution** | 接受演化因子 [[evolved_factors/{fname[:-3]}|{r.get('factor_name', 'Unknown_Factor')}]] "
+                f"(G{r.get('loop_round', r.get('generation', 0))} I{r.get('intra_loop_index', 0)}) | Rank IC: {rank_ic:.4f}\n"
+            )
     
     with open(WIKI_DIR / "log.md", 'w', encoding='utf-8') as f:
         f.write(log_content)
@@ -155,6 +202,7 @@ ic: {metrics.get('IC', 0)}
 ## 快速导航
 - 📂 [[log|最近发现 (Discovery Log)]]
 - 🧠 [[hypotheses/|研究假设分类 (Hypotheses)]]
+- 🧬 [[evolved_factors/|演化因子详情 (Evolved Factors)]]
 - 🛠️ [管理规范 (SCHEMA.md)](../SCHEMA.md)
 
 ## 核心指标 Top 10 (按 Sharpe 排序)
@@ -166,10 +214,22 @@ ic: {metrics.get('IC', 0)}
         fname = factor_to_filename.get(f"{r.get('loop_round',0)}_{r.get('intra_loop_index',0)}_{r['factor_name']}")
         index_content += f"| {r['factor_name']} | {r.get('run_id','legacy')} | {r['metrics'].get('sharpe', 0):.4f} | [[factors/{fname[:-3]}|查看详情]] |\n"
 
+    index_content += "\n## 演化因子 Top 10 (按 Rank IC 绝对值排序)\n"
+    index_content += "| 因子名称 | Run ID | Rank IC | 链接 |\n"
+    index_content += "| :--- | :--- | :--- | :--- |\n"
+    top_evolved = sorted(evolved_records, key=lambda x: abs(_metric_value(x, "Rank IC", "rank_ic")), reverse=True)[:10]
+    for r in top_evolved:
+        fname = _evolved_file_name(r)
+        rank_ic = _metric_value(r, "Rank IC", "rank_ic")
+        index_content += f"| {r.get('factor_name','Unknown_Factor')} | {r.get('run_id','legacy')} | {rank_ic:.4f} | [[evolved_factors/{fname[:-3]}|查看详情]] |\n"
+
     with open(WIKI_DIR / "index.md", 'w', encoding='utf-8') as f:
         f.write(index_content)
 
-    print(f"Successfully generated Wiki for {len(records)} factors and {len(hypotheses_map)} hypotheses.")
+    print(
+        f"Successfully generated Wiki for {len(records)} factors, "
+        f"{len(evolved_records)} evolved factors and {len(hypotheses_map)} hypotheses."
+    )
 
 if __name__ == "__main__":
     build_wiki()

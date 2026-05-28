@@ -263,6 +263,9 @@ class DataInterfaceTests(unittest.TestCase):
         self.assertIn("source_data_desc", payload)
         self.assertIn("feature_schema", payload)
         self.assertIn("data_artifacts", payload)
+        self.assertIn("knowledge_source_paths", payload)
+        self.assertIn("knowledge_counts", payload)
+        self.assertIn("knowledge_warnings", payload)
         self.assertIn("news_sentiment_score", payload["available_features"])
 
     def test_cross_section_adapter_supports_stock_payload(self) -> None:

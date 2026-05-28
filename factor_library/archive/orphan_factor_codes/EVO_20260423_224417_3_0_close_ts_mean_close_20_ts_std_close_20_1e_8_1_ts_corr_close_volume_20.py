@@ -1,0 +1,1 @@
+def get_factor(): return '($close - TS_MEAN($close, 20)) / (TS_STD($close, 20) + 1e-8) * (1 - TS_CORR($close, $volume, 20))'

@@ -291,38 +291,46 @@ subset GA 的结果只属于当前 run 的 artifact，不会直接污染单因�
 
 `evolution` 运行结束后，会把通过阈值的演化因子同步到：
 
-- `factor_library/wiki/evolved_factors/index.md`
-- `factor_library/wiki/evolved_factors/<run_id>/`
-
-它的作用是给“演化出来的因子”单独做门户，方便浏览父代、代数、表达式和指标。
-
-### 7.1.1 这些文件怎么成为后续输入
-
-`evolution` 当前对 wiki 的使用分成两层：
-
-1. **机器层输入**
-   - `factor_library/raw/evolved/distilled_lessons_evolution.md`
-   - 由 `distill_evolution_knowledge.py` 从最近失败样本中提炼
-   - 由 `EvolutionConfig.lessons_path` 指向
-   - 作用是给后续演化提供“不要重复犯哪些错”的长期记忆
-
-2. **人类可读门户**
-   - `factor_library/wiki/evolved_factors/index.md`
-   - `factor_library/wiki/evolved_factors/<run_id>/`
-   - 作用是把通过阈值的演化因子整理成可浏览的知识页
-
-当前代码里，这两个部分都已经生成；而且 **evolution 在启动前也会先加载同一套长期记忆快照**：
-
+- `factor_library/wiki/evolved_factors/*.md`
+- `factor_library/wiki/index.md`
 - `factor_library/wiki/log.md`
-- `factor_library/wiki/evolved_factors/index.md`
+
+它的作用是把“演化出来的因子”纳入统一 wiki 门户，方便浏览父代、代数、表达式和指标。`evolved_factors/` 不再维护自己的 `index.md`。
+
+### 7.1.1 `evolution` 实际读取哪些长期记忆
+
+`evolution` 启动前会通过统一知识入口 `load_for_evolution()` 先生成一份 `memory_context.json`。当前真实来源包括：
+
+- `factor_library/raw/negative_knowledge/distilled_lessons.md`
+- `factor_library/wiki/index.md`
+- `factor_library/wiki/log.md`
+- `factor_library/raw/all_factors_library.json`
+- `factor_library/raw/mutated_factors_library.json`
 - `factor_library/raw/evolved/evolution_failures.jsonl`
 - `factor_library/raw/evolved/distilled_lessons_evolution.md`
 
-这些内容会先汇总成 `logs/evolution_loop/EVO_*/memory_context.json`，再用于：
+这意味着 `evolution` 虽然没有 `mining` 那种逐轮对话式短期记忆，但它并不是“完全没记忆”。它有一份启动前加载的长期记忆快照。
+
+这份快照会被整理成：
+
+- `distilled_knowledge`
+- `success_factor_memory`
+- `evolution_success_factor_memory`
+- `evolution_failure_memory`
+- `evolution_distilled_knowledge`
+- `priority_seed_names`
+- `penalty_seed_names`
+
+然后写到：
+
+- `logs/evolution_loop/EVO_*/memory_context.json`
+
+再用于：
 
 - seed 的优先级排序
-- candidate 的先验筛选
-- run summary 的知识回看
+- 失败样本的惩罚
+- candidate pool 的先验筛选
+- run 结束后的知识回看
 
 当前默认仍然是“结构化记忆输入 + 确定性 GA”，不是整棵 wiki 的全文检索。后者如果要做，可以再加一层检索器，但不影响现在这条主链路。
 
@@ -336,21 +344,28 @@ subset GA 的结果只属于当前 run 的 artifact，不会直接污染单因�
 
 ### 7.3 这些文件怎么作为 input
 
-目前 `evolution` 的“长期记忆输入”主要是：
+目前 `evolution` 的长期记忆可以理解成四层：
 
-- `factor_library/wiki/log.md`
-- `factor_library/wiki/evolved_factors/index.md`
-- `factor_library/raw/evolved/distilled_lessons_evolution.md`
-- `factor_library/raw/evolved/evolution_failures.jsonl`
+- **主成功因子层**
+  `all_factors_library.json`
+  告诉 evolution 主工作流里哪些因子已经稳定通过
+- **演化成功因子层**
+  `mutated_factors_library.json`
+  告诉 evolution 哪些重组结构已经在演化阶段跑通
+- **失败证据层**
+  `evolution_failures.jsonl`
+  保留最近失败样本原始记录
+- **失败摘要层**
+  `distilled_lessons_evolution.md`
+  把最近失败经验压成更短的长期提示
 
-它们分别承担：
+随着时间沉淀，这套记忆的作用会越来越明显：
 
-- **成功记忆层**：告诉 evolution 哪些因子已经被验证过，优先从这些结构延展
-- **失败记忆层**：告诉 evolution 哪些重组套路、哪些表达式形态已经踩坑
-- **摘要层**：让后续演化知道最近哪些 recombination、哪些参数空间不值得再试
-- **证据层**：保留失败样本原始记录，方便重建 wiki 或重新提炼 lessons
+- seed 会越来越偏向历史上有效的结构
+- 已知差的结构会更快被降权
+- 新一轮演化更少浪费在重复失败的表达式族上
 
-如果你从 `scripts/run_factor_evolution.py` 走默认路径，这些文件会在 postprocess 阶段自动更新；如果你只跑脚本但禁用了 LLM screening，就会只更新 wiki，不再做人类摘要提炼。
+如果你从 `scripts/run_factor_evolution.py` 走默认路径，这些文件会在 postprocess 阶段自动更新；如果禁用了 LLM screening，就会保留失败原始记录和 wiki 刷新，但不会更新 `distilled_lessons_evolution.md`。
 
 ---
 
