@@ -240,22 +240,54 @@ flowchart LR
 
 ## 3. ⚡ 快速开始
 
-如果你想尽量少装本地依赖，先走 Docker 会更省心：
+这一节按“第一次接触这个项目”的顺序来写：先获取项目，再安装依赖，再配置 `.env`，再准备数据，最后分别运行 `mining`、`evolution`、`batch-backtest` 和报告入库流程。
+
+### 3.1 获取项目
+
+如果你会用 Git，推荐直接 `clone`：
+
+```bash
+git clone https://github.com/xueli-0315/Li_Multi_agent.git
+cd Li_Multi_agent
+```
+
+如果你暂时不想碰 Git，也可以：
+
+1. 打开 GitHub 仓库主页
+2. 点击 `Code`
+3. 点击 `Download ZIP`
+4. 解压后进入项目目录
+
+如果你已经通过别的方式拿到了项目目录，只要终端当前路径在仓库根目录，也可以直接继续下面的步骤。
+
+### 3.2 选择运行方式
+
+**方式 A：本地 Python 环境**
+
+适合想直接调代码、跑测试、改配置的用户：
+
+```bash
+pip install -e .
+```
+
+**方式 B：Docker**
+
+适合想尽量少装本地依赖的用户。注意，Docker 方式也默认你已经先把仓库下载到本地：
 
 ```bash
 docker build -t multi-agent-factor-mining .
 docker run --rm --env-file .env -v "$PWD:/app" multi-agent-factor-mining
 ```
 
-第一次拉仓库时，建议先把根目录的 [.env.example](./.env.example) 复制成 `.env` 再填密钥。
+### 3.3 准备环境变量
 
-### 3.1 安装
+第一次使用时，建议先从仓库根目录的 `.env.example` 起步：
 
 ```bash
-pip install -e .
+cp .env.example .env
 ```
 
-### 3.2 准备环境
+然后再编辑 `.env`，至少填一个可用的 LLM provider。
 
 最小 `.env` 示例：
 
@@ -277,7 +309,27 @@ ZHIPU_MODEL=glm-4-flash
 
 `AGENT_MODEL_MAP` 可以是 JSON，对不同 agent 指定不同模型。
 
-### 3.3 `mining` 模式
+### 3.4 准备数据
+
+最核心的输入是结构化 panel 数据：
+
+```text
+data/panel_data.parquet
+```
+
+如果你是第一次上手，可以先确认这几个目录是否已经就位：
+
+```text
+data/panel_data.parquet
+data/unstructured/reports/
+factor_library/
+logs/
+results/
+```
+
+`panel_data.parquet` 预期是 `datetime, symbol` 的多重索引 parquet。`crypto`、`stock`、`futures` 都可以接入，只要整理成统一 panel 格式。
+
+### 3.5 先跑一个最小 `mining`
 
 默认面向 crypto：
 
@@ -313,7 +365,7 @@ python3 main.py --mode mining \
   --market-type futures
 ```
 
-### 3.4 `evolution` 模式
+### 3.6 再跑 `evolution`
 
 优化表达式因子：
 
@@ -336,7 +388,7 @@ python3 main.py --mode evolution \
   --panel-data-path data/panel_data.parquet
 ```
 
-### 3.5 `batch-backtest` 模式
+### 3.7 最后跑 `batch-backtest`
 
 ```bash
 python3 main.py --mode batch-backtest \
@@ -356,9 +408,15 @@ python3 scripts/run_batch_backtest.py \
 
 如果你的本地环境启用了 MLflow 追踪，运行 `batch-backtest` 后还可能看到 `mlruns/` 增长。它保存的是实验追踪信息，不是最终对外展示的回测结果；主结果仍然看 `results/batch_backtest/BATCH_*/`。
 
-### 3.6 非结构化报告入库
+### 3.8 非结构化报告入库
 
-把原始报告放进 `data/unstructured/reports/`，然后执行：
+如果你希望给 `mining` 增加研报、公告、文章这类文本输入，可以把原始文件先放进：
+
+```text
+data/unstructured/reports/
+```
+
+然后执行：
 
 ```bash
 python3 scripts/ingest_unstructured_reports.py \
@@ -379,6 +437,19 @@ python3 scripts/ingest_unstructured_reports.py \
   --market-type crypto \
   --extractor rules
 ```
+
+### 3.9 一个最顺手的新手路径
+
+如果你只想先完整跑通一次，推荐顺序是：
+
+1. `git clone` 或 `Download ZIP`
+2. `pip install -e .` 或 `docker build + docker run`
+3. `cp .env.example .env` 并填入密钥
+4. 准备 `data/panel_data.parquet`
+5. 运行一次 `mining`
+6. 运行一次 `evolution`
+7. 运行一次 `batch-backtest`
+8. 有报告时，再运行 `ingest_unstructured_reports.py`
 
 ---
 
