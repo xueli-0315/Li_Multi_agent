@@ -267,7 +267,16 @@ cd Li_Multi_agent
 适合想直接调代码、跑测试、改配置的用户：
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -e .
+```
+
+如果你在 Windows PowerShell 下运行，可以把激活命令换成：
+
+```powershell
+.venv\Scripts\Activate.ps1
 ```
 
 **方式 B：Docker**
@@ -443,7 +452,7 @@ python3 scripts/ingest_unstructured_reports.py \
 如果你只想先完整跑通一次，推荐顺序是：
 
 1. `git clone` 或 `Download ZIP`
-2. `pip install -e .` 或 `docker build + docker run`
+2. 本地环境先执行 `python3 -m venv .venv`、`source .venv/bin/activate`、`pip install -e .`，或改走 `docker build + docker run`
 3. `cp .env.example .env` 并填入密钥
 4. 准备 `data/panel_data.parquet`
 5. 运行一次 `mining`
